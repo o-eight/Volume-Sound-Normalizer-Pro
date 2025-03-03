@@ -32,8 +32,8 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["popup.html", "popup.js"],
-      "matches": ["*://*.youtube.com/*"]
+      "resources": ["popup.html", "popup.js", "loudness-processor.js"],
+      "matches": ["*://*.youtube.com/*", "<all_urls>"]
     }
   ]
 }
