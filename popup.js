@@ -320,59 +320,6 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
 
-  // 現在のラウドネス値を取得して表示を更新
-  function updateLoudnessMeter() {
-    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-      if (!tabs || tabs.length === 0) return;
-
-      try {
-        chrome.tabs.sendMessage(tabs[0].id, {
-          action: 'getLoudnessInfo'
-        }, function (response) {
-          if (chrome.runtime.lastError) {
-            console.log('ラウドネス情報の取得に失敗:', chrome.runtime.lastError);
-            return;
-          }
-
-          if (response && response.success) {
-            const lufs = response.currentLoudness;
-
-            // 有効な値が返された場合のみ表示を更新
-            if (lufs > -70) {
-              // メーターバーの更新（-40〜0 LUFSの範囲を0%〜100%に変換）
-              const barWidth = Math.min(100, Math.max(0, (lufs + 40) * 2.5));
-              loudnessBar.style.width = `${barWidth}%`;
-
-              // 数値表示の更新
-              currentLoudnessValue.textContent = `${lufs.toFixed(1)} LUFS`;
-
-              // ターゲットとの差に応じた色の変更
-              const targetLufs = parseFloat(targetLoudnessSlider.value);
-              const difference = Math.abs(lufs - targetLufs);
-              const range = parseFloat(loudnessRangeSlider.value) / 2;
-
-              if (difference <= range) {
-                // 許容範囲内は緑
-                loudnessBar.style.backgroundColor = '#4CAF50';
-              } else if (difference <= range * 2) {
-                // やや範囲外は黄色
-                loudnessBar.style.backgroundColor = '#FFEB3B';
-              } else {
-                // 大きく範囲外は赤
-                loudnessBar.style.backgroundColor = '#F44336';
-              }
-            } else {
-              // 無音や極小音の場合
-              loudnessBar.style.width = '0%';
-              currentLoudnessValue.textContent = '無音';
-            }
-          }
-        });
-      } catch (error) {
-        console.error('ラウドネスメーター更新エラー:', error);
-      }
-    });
-  }
 
   // 現在のラウドネス値を取得して表示を更新
   function updateLoudnessMeter() {
@@ -427,6 +374,29 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     });
   }
+
+
+
+// ラウドネスモニタリングの開始/停止関数を追加
+function toggleLoudnessMonitoring(enabled) {
+  // 既存のインターバルがあれば停止
+  if (loudnessUpdateInterval) {
+    clearInterval(loudnessUpdateInterval);
+    loudnessUpdateInterval = null;
+  }
+
+  // 有効な場合は監視を開始
+  if (enabled) {
+    // 初回更新
+    updateLoudnessMeter();
+    // 定期的に更新（200ミリ秒ごと）
+    loudnessUpdateInterval = setInterval(updateLoudnessMeter, 200);
+  } else {
+    // 無効の場合はメーターをリセット
+    loudnessBar.style.width = '0%';
+    currentLoudnessValue.textContent = '無効';
+  }
+}
 
   // 設定保存の処理
   function saveSettings(saveForChannel, saveAsDefault) {
