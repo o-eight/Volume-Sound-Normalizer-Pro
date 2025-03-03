@@ -113,7 +113,7 @@
     .active:after {
       content: '−';
     }
-    .advanced-settings {
+    .advanced-settings, .loudness-settings {
       padding: 0 10px;
       max-height: 0;
       overflow: hidden;
@@ -134,28 +134,111 @@
       font-family: monospace;
       word-break: break-all;
     }
+    /* ラウドネスメーター用のスタイル */
+    .loudness-meter {
+      height: 16px;
+      width: 100%;
+      background: #e0e0e0;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 10px 0;
+      position: relative;
+    }
+    .loudness-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(to right, #4CAF50, #FFEB3B, #F44336);
+      transition: width 0.3s ease;
+    }
+    .loudness-target {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: #000;
+      z-index: 1;
+    }
+    .loudness-range {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.1);
+      z-index: 0;
+    }
+    .feature-section {
+      border-bottom: 1px solid #eee;
+      padding-bottom: 15px;
+      margin-bottom: 15px;
+    }
+    .section-title {
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
   </style>
 </head>
 <body>
   <h2>Volume & Sound Normalizer</h2>
   
   <div class="main-controls">
-    <div class="toggle-container">
-      <label class="switch">
-        <input type="checkbox" id="compressor-enabled">
-        <span class="slider"></span>
-      </label>
-      <span>音質補正（コンプレッサー）を有効化</span>
-    </div>
+    <!-- 音量調整セクション -->
+    <div class="feature-section">
+      <div class="toggle-container">
+        <label class="switch">
+          <input type="checkbox" id="compressor-enabled">
+          <span class="slider"></span>
+        </label>
+        <span>音質補正（コンプレッサー）を有効化</span>
+      </div>
 
-    <div class="slider-container">
-      <label for="makeup-gain">音量調整 (dB):</label>
-      <input type="range" id="makeup-gain" min="-12" max="30" value="0" step="0.5">
-      <span class="value-display" id="makeup-gain-value">0</span>
+      <div class="slider-container">
+        <label for="makeup-gain">音量調整 (dB):</label>
+        <input type="range" id="makeup-gain" min="-12" max="30" value="0" step="0.5">
+        <span class="value-display" id="makeup-gain-value">0</span>
+      </div>
+    </div>
+    
+    <!-- ラウドネスノーマライズセクション（新規追加） -->
+    <div class="feature-section">
+      <div class="toggle-container">
+        <label class="switch">
+          <input type="checkbox" id="loudness-norm-enabled">
+          <span class="slider"></span>
+        </label>
+        <span>ラウドネスノーマライズを有効化</span>
+      </div>
+      
+      <!-- ラウドネスメーター -->
+      <div class="loudness-meter">
+        <div class="loudness-range" id="loudness-range"></div>
+        <div class="loudness-target" id="loudness-target"></div>
+        <div class="loudness-bar" id="loudness-bar"></div>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 11px;">
+        <span>-40 LUFS</span>
+        <span id="current-loudness-value">N/A</span>
+        <span>0 LUFS</span>
+      </div>
     </div>
   </div>
 
-  <button class="collapsible">アドバンス設定</button>
+  <!-- ラウドネス設定（新規追加） -->
+  <button class="collapsible" id="loudness-collapsible">ラウドネス設定</button>
+  <div class="loudness-settings">
+    <div class="slider-container">
+      <label for="target-loudness">目標レベル (LUFS):</label>
+      <input type="range" id="target-loudness" min="-24" max="-6" value="-14" step="0.5">
+      <span class="value-display" id="target-loudness-value">-14</span>
+    </div>
+
+    <div class="slider-container">
+      <label for="loudness-range">許容範囲 (dB):</label>
+      <input type="range" id="loudness-range-slider" min="1" max="10" value="7" step="0.5">
+      <span class="value-display" id="loudness-range-value">7</span>
+    </div>
+  </div>
+
+  <!-- コンプレッサー詳細設定 -->
+  <button class="collapsible" id="advanced-collapsible">コンプレッサー詳細設定</button>
   <div class="advanced-settings">
     <div class="slider-container">
       <label for="threshold">閾値 (dB):</label>

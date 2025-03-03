@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', function () {
-  // スライダー要素と値表示要素の取得
+  // 既存のスライダー要素と値表示要素
   const thresholdSlider = document.getElementById('threshold');
   const thresholdValue = document.getElementById('threshold-value');
   const ratioSlider = document.getElementById('ratio');
@@ -14,6 +14,18 @@ document.addEventListener('DOMContentLoaded', function () {
   const makeupGainValue = document.getElementById('makeup-gain-value');
   const compressorEnabled = document.getElementById('compressor-enabled');
 
+  // ラウドネスノーマライズ用の要素（新規追加）
+  const loudnessNormEnabled = document.getElementById('loudness-norm-enabled');
+  const targetLoudnessSlider = document.getElementById('target-loudness');
+  const targetLoudnessValue = document.getElementById('target-loudness-value');
+  const loudnessRangeSlider = document.getElementById('loudness-range-slider');
+  const loudnessRangeValue = document.getElementById('loudness-range-value');
+  const loudnessBar = document.getElementById('loudness-bar');
+  const loudnessTarget = document.getElementById('loudness-target');
+  const loudnessRange = document.getElementById('loudness-range');
+  const currentLoudnessValue = document.getElementById('current-loudness-value');
+
+  // 既存のボタン要素
   const saveButton = document.getElementById('save-settings');
   const saveChannelButton = document.getElementById('save-channel');
   const saveGeneralButton = document.getElementById('save-settings-general');
@@ -23,11 +35,13 @@ document.addEventListener('DOMContentLoaded', function () {
   const detectionMethodSpan = document.getElementById('detection-method');
 
   // 折りたたみパネルの設定
-  const collapsible = document.querySelector('.collapsible');
+  const advancedCollapsible = document.getElementById('advanced-collapsible');
   const advancedSettings = document.querySelector('.advanced-settings');
+  const loudnessCollapsible = document.getElementById('loudness-collapsible');
+  const loudnessSettings = document.querySelector('.loudness-settings');
 
   // 折りたたみパネルのクリックイベント
-  collapsible.addEventListener('click', function () {
+  advancedCollapsible.addEventListener('click', function () {
     this.classList.toggle('active');
 
     if (advancedSettings.style.maxHeight) {
@@ -37,8 +51,20 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
+  // ラウドネス設定の折りたたみパネルのクリックイベント
+  loudnessCollapsible.addEventListener('click', function () {
+    this.classList.toggle('active');
+
+    if (loudnessSettings.style.maxHeight) {
+      loudnessSettings.style.maxHeight = null;
+    } else {
+      loudnessSettings.style.maxHeight = loudnessSettings.scrollHeight + 'px';
+    }
+  });
+
   let currentChannelId = '';
   let isYouTube = false;
+  let loudnessUpdateInterval = null;
 
   // エラーメッセージを表示
   function showError(message) {
@@ -155,7 +181,7 @@ document.addEventListener('DOMContentLoaded', function () {
       // 検出方法を表示
       detectionMethodSpan.textContent = detectionMethod || '不明';
 
-      console.log('チャンネル名を表示:', channelNameSpan.textContent, '取得方法:', detectionMethod);
+      console.log('チャンネル名を表示:', channelNameSpan.textContent, '方法:', detectionMethod);
 
       // チャンネル固有の設定を読み込む
       loadChannelSettings(currentChannelId);
@@ -175,7 +201,11 @@ document.addEventListener('DOMContentLoaded', function () {
         attack: 50,
         release: 250,
         knee: 5,
-        makeupGain: 0
+        makeupGain: 0,
+        // ラウドネスノーマライズのデフォルト設定を追加
+        loudnessNormEnabled: false,
+        targetLoudness: -14,
+        loudnessRange: 7
       },
       [settingsKey]: null
     }, function (items) {
@@ -197,7 +227,11 @@ document.addEventListener('DOMContentLoaded', function () {
         attack: 50,
         release: 250,
         knee: 5,
-        makeupGain: 0
+        makeupGain: 0,
+        // ラウドネスノーマライズのデフォルト設定を追加
+        loudnessNormEnabled: false,
+        targetLoudness: -14,
+        loudnessRange: 7
       }
     }, function (items) {
       applySettingsToUI(items.default);
@@ -206,6 +240,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // 設定をUIに適用
   function applySettingsToUI(settings) {
+    // 既存の設定を適用
     compressorEnabled.checked = settings.enabled;
     thresholdSlider.value = settings.threshold;
     thresholdValue.textContent = settings.threshold;
@@ -219,6 +254,24 @@ document.addEventListener('DOMContentLoaded', function () {
     kneeValue.textContent = settings.knee;
     makeupGainSlider.value = settings.makeupGain;
     makeupGainValue.textContent = settings.makeupGain;
+
+    // ラウドネス設定を適用（新規）
+    if ('loudnessNormEnabled' in settings) {
+      loudnessNormEnabled.checked = settings.loudnessNormEnabled;
+    }
+    if ('targetLoudness' in settings) {
+      targetLoudnessSlider.value = settings.targetLoudness;
+      targetLoudnessValue.textContent = settings.targetLoudness;
+      updateLoudnessMeterTarget();
+    }
+    if ('loudnessRange' in settings) {
+      loudnessRangeSlider.value = settings.loudnessRange;
+      loudnessRangeValue.textContent = settings.loudnessRange;
+      updateLoudnessMeterRange();
+    }
+
+    // ラウドネスモニタリングを開始/停止
+    toggleLoudnessMonitoring(settings.loudnessNormEnabled);
   }
 
   // 現在の設定を取得
@@ -230,8 +283,115 @@ document.addEventListener('DOMContentLoaded', function () {
       attack: parseInt(attackSlider.value, 10),
       release: parseInt(releaseSlider.value, 10),
       knee: parseInt(kneeSlider.value, 10),
-      makeupGain: parseFloat(makeupGainSlider.value)
+      makeupGain: parseFloat(makeupGainSlider.value),
+      // ラウドネス設定を追加
+      loudnessNormEnabled: loudnessNormEnabled.checked,
+      targetLoudness: parseFloat(targetLoudnessSlider.value),
+      loudnessRange: parseFloat(loudnessRangeSlider.value)
     };
+  }
+
+  // ラウドネスメーターのターゲットマーカーを更新
+  function updateLoudnessMeterTarget() {
+    const targetLufs = parseFloat(targetLoudnessSlider.value);
+    // LUFSスケールを0〜-40の表示範囲に変換（0が右端、-40が左端）
+    const position = (1 - Math.abs(targetLufs) / 40) * 100;
+    loudnessTarget.style.left = `${position}%`;
+  }
+
+  // ラウドネスメーターの許容範囲を更新
+  function updateLoudnessMeterRange() {
+    const targetLufs = parseFloat(targetLoudnessSlider.value);
+    const range = parseFloat(loudnessRangeSlider.value);
+    
+    // 範囲の開始位置と幅を計算
+    const startLufs = targetLufs - range / 2;
+    const endLufs = targetLufs + range / 2;
+    
+    // スケールを表示範囲に変換
+    const startPosition = (1 - Math.abs(startLufs) / 40) * 100;
+    const endPosition = (1 - Math.abs(endLufs) / 40) * 100;
+    const width = endPosition - startPosition;
+    
+    // レンジ表示を更新
+    loudnessRange.style.left = `${startPosition}%`;
+    loudnessRange.style.width = `${width}%`;
+  }
+
+  // 現在のラウドネス値を取得して表示を更新
+  function updateLoudnessMeter() {
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+      if (!tabs || tabs.length === 0) return;
+      
+      try {
+        chrome.tabs.sendMessage(tabs[0].id, {
+          action: 'getLoudnessInfo'
+        }, function (response) {
+          if (chrome.runtime.lastError) {
+            console.log('ラウドネス情報の取得に失敗:', chrome.runtime.lastError);
+            return;
+          }
+          
+          if (response && response.success) {
+            const lufs = response.currentLoudness;
+            
+            // 有効な値が返された場合のみ表示を更新
+            if (lufs > -70) {
+              // メーターバーの更新（-40〜0 LUFSの範囲を0%〜100%に変換）
+              const barWidth = Math.min(100, Math.max(0, (lufs + 40) * 2.5));
+              loudnessBar.style.width = `${barWidth}%`;
+              
+              // 数値表示の更新
+              currentLoudnessValue.textContent = `${lufs.toFixed(1)} LUFS`;
+              
+              // ターゲットとの差に応じた色の変更
+              const targetLufs = parseFloat(targetLoudnessSlider.value);
+              const difference = Math.abs(lufs - targetLufs);
+              const range = parseFloat(loudnessRangeSlider.value) / 2;
+              
+              if (difference <= range) {
+                // 許容範囲内は緑
+                loudnessBar.style.backgroundColor = '#4CAF50';
+              } else if (difference <= range * 2) {
+                // やや範囲外は黄色
+                loudnessBar.style.backgroundColor = '#FFEB3B';
+              } else {
+                // 大きく範囲外は赤
+                loudnessBar.style.backgroundColor = '#F44336';
+              }
+            } else {
+              // 無音や極小音の場合
+              loudnessBar.style.width = '0%';
+              currentLoudnessValue.textContent = '無音';
+            }
+          }
+        });
+      } catch (error) {
+        console.error('ラウドネスメーター更新エラー:', error);
+      }
+    });
+  }
+
+  // ラウドネスモニタリングの開始/停止
+  function toggleLoudnessMonitoring(enabled) {
+    // 既存の更新間隔をクリア
+    if (loudnessUpdateInterval) {
+      clearInterval(loudnessUpdateInterval);
+      loudnessUpdateInterval = null;
+    }
+    
+    // 有効な場合は新しい更新間隔を設定
+    if (enabled) {
+      // 初回の更新
+      updateLoudnessMeter();
+      
+      // 定期的な更新（200ms間隔）
+      loudnessUpdateInterval = setInterval(updateLoudnessMeter, 200);
+    } else {
+      // 無効時はメーターをリセット
+      loudnessBar.style.width = '0%';
+      currentLoudnessValue.textContent = 'N/A';
+    }
   }
 
   // 設定保存の処理
@@ -437,8 +597,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-
-  // 既存のスライダーイベントリスナーを修正し、値の変更時に設定を更新する
+  // 既存のスライダーイベントリスナー
   thresholdSlider.addEventListener('input', function () {
     thresholdValue.textContent = this.value;
     updateSettingsRealtime();
@@ -469,8 +628,28 @@ document.addEventListener('DOMContentLoaded', function () {
     updateSettingsRealtime();
   });
 
+  // ラウドネス設定のイベントリスナー
+  targetLoudnessSlider.addEventListener('input', function () {
+    targetLoudnessValue.textContent = this.value;
+    updateLoudnessMeterTarget();
+    updateLoudnessMeterRange();
+    updateSettingsRealtime();
+  });
+
+  loudnessRangeSlider.addEventListener('input', function () {
+    loudnessRangeValue.textContent = this.value;
+    updateLoudnessMeterRange();
+    updateSettingsRealtime();
+  });
+
   // コンプレッサーの有効/無効切り替えもリアルタイムで適用
   compressorEnabled.addEventListener('change', function () {
+    updateSettingsRealtime();
+  });
+
+  // ラウドネスノーマライズの有効/無効切り替え
+  loudnessNormEnabled.addEventListener('change', function () {
+    toggleLoudnessMonitoring(this.checked);
     updateSettingsRealtime();
   });
 
@@ -512,9 +691,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }, 50); // 50ms遅延（スムーズな更新のバランス）
   }
 
-  // 既存のsaveSettings関数は残しておきます
-  // これは設定を永続的に保存するために使用します
-
   // デフォルトとして保存ボタンのクリックイベント
   saveButton.addEventListener('click', function () {
     saveSettings(false, true);
@@ -528,6 +704,14 @@ document.addEventListener('DOMContentLoaded', function () {
   // 一般的な保存ボタンのクリックイベント（YouTube以外のページ用）
   saveGeneralButton.addEventListener('click', function () {
     saveSettings(false, true);
+  });
+
+  // ポップアップが閉じられるときの処理
+  window.addEventListener('unload', function() {
+    // ラウドネスモニタリングを停止
+    if (loudnessUpdateInterval) {
+      clearInterval(loudnessUpdateInterval);
+    }
   });
 
   // 初期化

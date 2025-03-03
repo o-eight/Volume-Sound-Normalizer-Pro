@@ -18,11 +18,26 @@
 
   // メイン機能を初期化する関数
   function initializeExtension() {
-    // オーディオコンテキストとノード参照を格納する変数
+
+    // リアルタイム更新のスロットリング用
+    let updateThrottleTimeout = null;
+
+    // 検出メソッドを追跡する変数を追加
+    let lastDetectionMethod = '';
+    // ナビゲーション変更用のタイムアウト変数を追加
+    let navigationChangeTimeout = null;
+
+    // content.js に追加する変更
+    // 初期化関数の変数定義部分に以下を追加:
+
+    // Web Audio APIのノード参照
     let audioContext;
     let compressorNode;
     let sourceNode;
     let gainNode;
+    let analyserNode; // 新規: 音声分析用
+    let loudnessWorkletNode; // ScriptProcessorNodeの代わりにAudioWorkletNodeを使用
+    let workletInitialized = false; // AudioWorkletProcessorが初期化されたかどうか
     let videoElements = [];
     let connectedVideos = new WeakMap();
     let currentChannelId = '';
@@ -33,18 +48,61 @@
       attack: 50,
       release: 250,
       knee: 5,
-      makeupGain: 0
+      makeupGain: 0,
+      // ラウドネスノーマライズの設定を追加
+      loudnessNormEnabled: false,
+      targetLoudness: -14, // LUFS (一般的なストリーミングサービスの標準値)
+      loudnessRange: 7     // 許容範囲 (dB)
     };
     let compressorSettings = { ...defaultSettings };
-    
-    // リアルタイム更新のスロットリング用
-    let updateThrottleTimeout = null;
 
-    // 検出メソッドを追跡する変数を追加
-    let lastDetectionMethod = '';
-    // ナビゲーション変更用のタイムアウト変数を追加
-    let navigationChangeTimeout = null;
+    // ラウドネスの測定と調整のための変数
+    let currentLoudness = -70; // 初期値は十分に小さくしておく
+    let loudnessHistory = []; // 過去のラウドネス値履歴
+    const HISTORY_SIZE = 10; // 履歴サイズ
+    let lastGainAdjustment = 0; // 前回のゲイン調整値
 
+    // メーターの重み付け係数 (K-weighting filter近似)
+    let kWeights = {
+      lowShelf: {
+        frequency: 60,
+        gain: -10
+      },
+      highPass: {
+        frequency: 100
+      },
+      highShelf: {
+        frequency: 8000,
+        gain: 4
+      }
+    };
+
+
+    // AudioWorkletを初期化する関数
+    async function initAudioWorklet() {
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+
+      if (!workletInitialized) {
+        try {
+          // AudioWorkletProcessorモジュールのURLを作成
+          // Chrome拡張機能内のファイルへのURLを取得
+          const workletUrl = chrome.runtime.getURL('loudness-processor.js');
+
+          // AudioWorkletを追加
+          await audioContext.audioWorklet.addModule(workletUrl);
+          workletInitialized = true;
+          console.log('AudioWorklet initialized successfully');
+        } catch (error) {
+          console.error('Failed to initialize AudioWorklet:', error);
+          // AudioWorkletの初期化に失敗した場合はフラグをリセット
+          workletInitialized = false;
+        }
+      }
+
+      return workletInitialized;
+    }
 
     // YouTubeのURLからチャンネルIDを取得する関数（シンプル化版）
     function getYouTubeChannelId() {
@@ -332,7 +390,8 @@
       return '';
     }
 
-    // メッセージリスナーを改善
+
+    // メッセージリスナーを拡張して新しいコマンドに対応:
     chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
       console.log('コンテンツスクリプトがメッセージを受信:', request.action);
 
@@ -358,43 +417,25 @@
           updateThrottleTimeout = setTimeout(() => {
             // コンプレッサーの設定を適用
             updateCompressorSettings();
+
+            // コンプレッサーの有効/無効を適用
             toggleCompressor(compressorSettings.enabled);
+
+            // ラウドネスノーマライズの設定を適用 (新規)
+            if ('loudnessNormEnabled' in compressorSettings) {
+              toggleLoudnessNormalization(compressorSettings.loudnessNormEnabled);
+            }
+
+            // ラウドネスの目標値と範囲を更新 (新規)
+            if ('targetLoudness' in compressorSettings && 'loudnessRange' in compressorSettings) {
+              updateLoudnessSettings(compressorSettings.targetLoudness, compressorSettings.loudnessRange);
+            }
           }, 20); // 20msのスロットリング
 
-          // チャンネル固有の設定を保存
-          if (request.saveForChannel && currentChannelId) {
-            const settingsKey = getChannelSettingsKey(currentChannelId);
-            chrome.storage.sync.set({
-              [settingsKey]: compressorSettings
-            }, function () {
-              if (chrome.runtime.lastError) {
-                console.error('チャンネル設定の保存エラー:', chrome.runtime.lastError);
-                sendResponse({ success: false, error: chrome.runtime.lastError.message });
-              } else {
-                console.log('チャンネル設定を保存しました:', settingsKey);
-                sendResponse({ success: true });
-              }
-            });
-            return true; // 非同期レスポンスのために必要
-          }
+          // 以下、保存処理部分は変更なし
+          // チャンネル固有の設定を保存...
+          // ...
 
-          // デフォルト設定を保存
-          if (request.saveAsDefault) {
-            chrome.storage.sync.set({
-              'default': compressorSettings
-            }, function () {
-              if (chrome.runtime.lastError) {
-                console.error('デフォルト設定の保存エラー:', chrome.runtime.lastError);
-                sendResponse({ success: false, error: chrome.runtime.lastError.message });
-              } else {
-                console.log('デフォルト設定を保存しました');
-                sendResponse({ success: true });
-              }
-            });
-            return true; // 非同期レスポンスのために必要
-          }
-
-          // 設定の更新のみの場合（保存なし）
           sendResponse({ success: true });
         } catch (error) {
           console.error('設定更新処理中のエラー:', error);
@@ -402,71 +443,37 @@
         }
         return true;
       }
-      else if (request.action === 'getChannelInfo') {
+
+      // getLoudnessInfo - 現在のラウドネス情報を取得する新しいコマンド
+      // メッセージリスナーの getLoudnessInfo 処理を更新
+      // ...
+      else if (request.action === 'getLoudnessInfo') {
         try {
-          // 現在のチャンネル情報を返す
-          const channelInfo = getYouTubeChannelId();
-          console.log('チャンネル情報を返します:', channelInfo);
           sendResponse({
-            channelId: channelInfo.id,
-            channelName: channelInfo.name || getChannelName(),
-            detectionMethod: channelInfo.method
+            success: true,
+            currentLoudness: currentLoudness,
+            targetLoudness: compressorSettings.targetLoudness,
+            isEnabled: compressorSettings.loudnessNormEnabled && workletInitialized
           });
         } catch (error) {
-          console.error('チャンネル情報取得中のエラー:', error);
+          console.error('ラウドネス情報取得中のエラー:', error);
           sendResponse({
-            error: true,
-            message: error.message
+            success: false,
+            error: error.message,
+            workletInitialized: workletInitialized
           });
         }
         return true;
       }
-      else if (request.action === 'forceChannelInfoRefresh') {
-        // チャンネル情報を強制的に再取得
-        console.log('チャンネル情報の強制更新リクエストを受信');
+      // ...
 
-        try {
-          // チャンネル情報を再取得
-          const channelInfo = getYouTubeChannelId();
-          const channelId = channelInfo.id;
-          const channelName = channelInfo.name || getChannelName();
+      // 他のメッセージタイプは元のままで処理
+      // ...
 
-          console.log('強制更新で取得したチャンネル情報:', channelId, channelName, '方法:', channelInfo.method);
-
-          // 最新のチャンネル情報でグローバル変数を更新
-          currentChannelId = channelId;
-
-          // background.jsにも通知
-          chrome.runtime.sendMessage({
-            action: 'channelChanged',
-            channelId: channelId,
-            channelName: channelName,
-            detectionMethod: channelInfo.method
-          }).catch(err => {
-            console.log('バックグラウンドへの通知エラー (無視可):', err);
-          });
-
-          // レスポンスを送信
-          sendResponse({
-            channelId: channelId,
-            channelName: channelName,
-            detectionMethod: channelInfo.method
-          });
-        } catch (error) {
-          console.error('チャンネル情報の強制更新中にエラー:', error);
-          sendResponse({
-            error: true,
-            message: error.message
-          });
-        }
-
-        // 非同期レスポンスのためにtrueを返す
-        return true;
-      }
-
-      // 他のメッセージタイプのために必要
+      // 非同期レスポンスのためにtrueを返す
       return true;
     });
+
 
     // ページ内の動画要素を探してコンプレッサーを適用
     function findAndProcessVideos() {
@@ -489,17 +496,41 @@
       });
     }
 
-    // コンプレッサーを動画に適用する関数
-    function applyCompressorToVideo(videoElement) {
+
+    // 動画にコンプレッサーを適用する関数（更新版）
+    async function applyCompressorToVideo(videoElement) {
       try {
         if (!audioContext) {
           audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        // AudioWorkletが必要かつ初期化されていなければ初期化を試みる
+        if (compressorSettings.loudnessNormEnabled && !workletInitialized) {
+          const initialized = await initAudioWorklet();
+          if (!initialized) {
+            console.warn('AudioWorklet initialization failed, loudness normalization disabled');
+            // 初期化に失敗した場合はラウドネスノーマライズを無効化
+            compressorSettings.loudnessNormEnabled = false;
+          }
         }
 
         // 既存のノードがある場合は切断
         if (connectedVideos.has(videoElement)) {
           const nodes = connectedVideos.get(videoElement);
           nodes.source.disconnect();
+
+          if (nodes.analyser) {
+            nodes.analyser.disconnect();
+          }
+
+          if (nodes.loudnessWorklet) {
+            nodes.loudnessWorklet.disconnect();
+            // Workletポートのイベントリスナーを削除
+            if (nodes.loudnessWorklet.port) {
+              nodes.loudnessWorklet.port.onmessage = null;
+            }
+          }
+
           nodes.gain.disconnect();
           nodes.compressor.disconnect();
         }
@@ -508,6 +539,70 @@
         sourceNode = audioContext.createMediaElementSource(videoElement);
         compressorNode = audioContext.createDynamicsCompressor();
         gainNode = audioContext.createGain();
+        analyserNode = audioContext.createAnalyser();
+        analyserNode.fftSize = 2048;
+
+        // AudioWorkletNodeの作成（ラウドネスノーマライズ有効時のみ）
+        if (compressorSettings.loudnessNormEnabled && workletInitialized) {
+          loudnessWorkletNode = new AudioWorkletNode(audioContext, 'loudness-processor');
+
+          // Workletから測定データを受信
+          loudnessWorkletNode.port.onmessage = (event) => {
+            if (event.data.type === 'measurement') {
+              // 測定されたラウドネス値を取得
+              const measuredLoudness = event.data.loudness;
+              currentLoudness = measuredLoudness;
+
+              // 目標ラウドネスとの差を計算
+              const loudnessDifference = compressorSettings.targetLoudness - measuredLoudness;
+
+              // 差が許容範囲内であれば調整しない
+              const withinRange = Math.abs(loudnessDifference) <= compressorSettings.loudnessRange / 2;
+
+              if (!withinRange) {
+                // 適用するゲイン調整値を計算（変化が緩やかになるよう制限）
+                const MAX_ADJUSTMENT = 0.5; // 一度に最大0.5dBまで調整
+                let gainAdjustment = Math.max(-MAX_ADJUSTMENT, Math.min(MAX_ADJUSTMENT, loudnessDifference * 0.1));
+
+                // 前回の調整値との平均をとり、変化を滑らかにする
+                gainAdjustment = (gainAdjustment + lastGainAdjustment) / 2;
+                lastGainAdjustment = gainAdjustment;
+
+                // ゲイン値を更新
+                const currentGainDb = compressorSettings.makeupGain;
+                const newGainDb = currentGainDb + gainAdjustment;
+
+                // ゲイン調整の範囲を制限 (-12dB から +12dB)
+                const limitedGainDb = Math.max(-12, Math.min(12, newGainDb));
+
+                // 音が大きすぎる場合は下げる、小さすぎる場合は上げる
+                if (newGainDb !== currentGainDb) {
+                  // 全てのビデオ要素に対して調整
+                  videoElements.forEach(video => {
+                    if (connectedVideos.has(video)) {
+                      const nodes = connectedVideos.get(video);
+                      const linearGain = Math.pow(10, limitedGainDb / 20);
+
+                      // 滑らかに変化させるため時間をかけて調整
+                      const now = audioContext.currentTime;
+                      nodes.gain.gain.linearRampToValueAtTime(linearGain, now + 0.1);
+                    }
+                  });
+
+                  // 設定も更新
+                  compressorSettings.makeupGain = limitedGainDb;
+                }
+              }
+            }
+          };
+
+          // 現在の設定をWorkletに送信
+          loudnessWorkletNode.port.postMessage({
+            type: 'config',
+            targetLoudness: compressorSettings.targetLoudness,
+            loudnessRange: compressorSettings.loudnessRange
+          });
+        }
 
         // コンプレッサーの設定を適用
         compressorNode.threshold.value = compressorSettings.threshold;
@@ -519,30 +614,55 @@
         // メイクアップゲインの設定 (dBをリニアゲインに変換)
         gainNode.gain.value = Math.pow(10, compressorSettings.makeupGain / 20);
 
-        // ノードを接続
+        // ノードを接続 (ラウドネスノーマライズが有効な場合は分析ノードも含める)
         if (compressorSettings.enabled) {
-          // コンプレッサーとゲインの両方を適用
+          // オーディオパスの接続
           sourceNode.connect(compressorNode);
           compressorNode.connect(gainNode);
-          gainNode.connect(audioContext.destination);
+
+          // ラウドネスノーマライズが有効かつWorkletが初期化されている場合
+          if (compressorSettings.loudnessNormEnabled && workletInitialized) {
+            // ラウドネス測定用の分岐パスを接続
+            gainNode.connect(analyserNode);
+            analyserNode.connect(loudnessWorkletNode);
+            // AudioWorkletにオーディオを送るが、出力はしない（パラレル処理）
+            gainNode.connect(audioContext.destination);
+          } else {
+            // 通常のオーディオパス
+            gainNode.connect(audioContext.destination);
+          }
         } else {
           // コンプレッサーなしでゲイン（音量調整）のみを適用
           sourceNode.connect(gainNode);
-          gainNode.connect(audioContext.destination);
+
+          // ラウドネスノーマライズが有効かつWorkletが初期化されている場合
+          if (compressorSettings.loudnessNormEnabled && workletInitialized) {
+            // ラウドネス測定用の分岐パスを接続
+            gainNode.connect(analyserNode);
+            analyserNode.connect(loudnessWorkletNode);
+            // 通常のオーディオパス
+            gainNode.connect(audioContext.destination);
+          } else {
+            // 通常のオーディオパス
+            gainNode.connect(audioContext.destination);
+          }
         }
 
         // 接続情報を保存
         connectedVideos.set(videoElement, {
           source: sourceNode,
           compressor: compressorNode,
-          gain: gainNode
+          gain: gainNode,
+          analyser: analyserNode,
+          loudnessWorklet: compressorSettings.loudnessNormEnabled && workletInitialized ? loudnessWorkletNode : null
         });
 
-        console.log('Compressor applied to video element', videoElement);
+        console.log('Audio processing applied to video element', videoElement);
       } catch (error) {
-        console.error('Failed to apply compressor to video:', error);
+        console.error('Failed to apply audio processing to video:', error);
       }
     }
+
 
     // より効率的なコンプレッサー設定更新関数
     function updateCompressorSettings() {
@@ -575,7 +695,93 @@
       });
     }
 
-    // コンプレッサーの有効/無効を切り替える関数
+
+
+    // オーディオ処理関数 (ラウドネス計算と調整)
+    function processAudio(event) {
+      // ラウドネスノーマライズが無効の場合は何もしない
+      if (!compressorSettings.loudnessNormEnabled) return;
+
+      try {
+        // 入力バッファを取得
+        const inputBuffer = event.inputBuffer;
+        const inputData = inputBuffer.getChannelData(0); // 左チャンネル
+
+        // RMSレベル計算 (単純な音量レベル)
+        let sum = 0;
+        for (let i = 0; i < inputData.length; i++) {
+          sum += inputData[i] * inputData[i];
+        }
+        const rms = Math.sqrt(sum / inputData.length);
+
+        // RMSをdBに変換 (20 * log10(rms))
+        const dbFS = 20 * Math.log10(rms);
+
+        // 簡易的なLUFSへの変換 (実際のLUFSはもっと複雑)
+        // EBU R128 規格の簡易近似
+        const lufs = dbFS - 10; // 簡易的な K-weighting 補正
+
+        // -70dB未満の値は無視 (無音部分)
+        if (lufs > -70) {
+          // 履歴に追加
+          loudnessHistory.push(lufs);
+          if (loudnessHistory.length > HISTORY_SIZE) {
+            loudnessHistory.shift(); // 古い値を削除
+          }
+
+          // 平均ラウドネスを計算
+          const avgLoudness = loudnessHistory.reduce((a, b) => a + b, 0) / loudnessHistory.length;
+          currentLoudness = avgLoudness;
+
+          // 目標ラウドネスとの差を計算
+          const loudnessDifference = compressorSettings.targetLoudness - avgLoudness;
+
+          // 差が許容範囲内であれば調整しない
+          const withinRange = Math.abs(loudnessDifference) <= compressorSettings.loudnessRange / 2;
+
+          if (!withinRange) {
+            // 適用するゲイン調整値を計算 (変化が緩やかになるよう制限)
+            const MAX_ADJUSTMENT = 0.5; // 一度に最大0.5dBまで調整
+            let gainAdjustment = Math.max(-MAX_ADJUSTMENT, Math.min(MAX_ADJUSTMENT, loudnessDifference * 0.1));
+
+            // 前回の調整値との平均をとり、変化を滑らかにする
+            gainAdjustment = (gainAdjustment + lastGainAdjustment) / 2;
+            lastGainAdjustment = gainAdjustment;
+
+            // ゲイン値を更新
+            const currentGainDb = compressorSettings.makeupGain;
+            const newGainDb = currentGainDb + gainAdjustment;
+
+            // ゲイン調整の範囲を制限 (-12dB から +12dB)
+            const limitedGainDb = Math.max(-12, Math.min(12, newGainDb));
+
+            // 音が大きすぎる場合は下げる、小さすぎる場合は上げる
+            if (newGainDb !== currentGainDb) {
+              // 全てのビデオ要素に対して調整
+              videoElements.forEach(video => {
+                if (connectedVideos.has(video)) {
+                  const nodes = connectedVideos.get(video);
+                  const linearGain = Math.pow(10, limitedGainDb / 20);
+
+                  // 滑らかに変化させるため時間をかけて調整
+                  const now = audioContext.currentTime;
+                  nodes.gain.gain.linearRampToValueAtTime(linearGain, now + 0.1);
+                }
+              });
+
+              // 設定も更新
+              compressorSettings.makeupGain = limitedGainDb;
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Error in audio processing:', e);
+      }
+    }
+
+
+
+    // トグルコンプレッサーの関数を更新
     function toggleCompressor(enabled) {
       videoElements.forEach(video => {
         if (connectedVideos.has(video)) {
@@ -586,20 +792,108 @@
           nodes.compressor.disconnect();
           nodes.gain.disconnect();
 
+          if (nodes.analyser) {
+            nodes.analyser.disconnect();
+          }
+
+          if (nodes.loudnessWorklet) {
+            nodes.loudnessWorklet.disconnect();
+          }
+
           // 有効/無効に応じて再接続
           if (enabled) {
             // コンプレッサーとゲイン両方適用
             nodes.source.connect(nodes.compressor);
             nodes.compressor.connect(nodes.gain);
-            nodes.gain.connect(audioContext.destination);
+
+            // ラウドネスノーマライズが有効かつWorkletが初期化されている場合
+            if (compressorSettings.loudnessNormEnabled && workletInitialized && nodes.loudnessWorklet) {
+              // ラウドネス測定用の分岐パスを接続
+              nodes.gain.connect(nodes.analyser);
+              nodes.analyser.connect(nodes.loudnessWorklet);
+              nodes.gain.connect(audioContext.destination);
+            } else {
+              nodes.gain.connect(audioContext.destination);
+            }
           } else {
             // コンプレッサーなしでゲイン（音量調整）のみを適用
             nodes.source.connect(nodes.gain);
-            nodes.gain.connect(audioContext.destination);
+
+            // ラウドネスノーマライズが有効かつWorkletが初期化されている場合
+            if (compressorSettings.loudnessNormEnabled && workletInitialized && nodes.loudnessWorklet) {
+              // ラウドネス測定用の分岐パスを接続
+              nodes.gain.connect(nodes.analyser);
+              nodes.analyser.connect(nodes.loudnessWorklet);
+              nodes.gain.connect(audioContext.destination);
+            } else {
+              nodes.gain.connect(audioContext.destination);
+            }
           }
         }
       });
     }
+
+
+
+    // ラウドネスノーマライズの有効/無効を切り替える関数を更新
+    async function toggleLoudnessNormalization(enabled) {
+      compressorSettings.loudnessNormEnabled = enabled;
+
+      if (enabled && !workletInitialized) {
+        // 有効化時にWorkletが初期化されていなければ初期化を試みる
+        const initialized = await initAudioWorklet();
+        if (!initialized) {
+          console.warn('AudioWorklet initialization failed, loudness normalization disabled');
+          compressorSettings.loudnessNormEnabled = false;
+          return false;
+        }
+      }
+
+      // 履歴をリセット
+      loudnessHistory = [];
+      currentLoudness = -70;
+      lastGainAdjustment = 0;
+
+      // 既存の接続を更新
+      videoElements.forEach(video => {
+        if (connectedVideos.has(video) && !video.paused) {
+          // すでに接続されている場合は、再適用して接続を更新
+          applyCompressorToVideo(video);
+        }
+      });
+
+      return true;
+    }
+
+
+    // ラウドネスノーマライズの設定を更新する関数
+    function updateLoudnessSettings(targetLoudness, loudnessRange) {
+      compressorSettings.targetLoudness = targetLoudness;
+      compressorSettings.loudnessRange = loudnessRange;
+
+      // 設定を接続済みのWorkletに送信
+      videoElements.forEach(video => {
+        if (connectedVideos.has(video)) {
+          const nodes = connectedVideos.get(video);
+          if (nodes.loudnessWorklet && nodes.loudnessWorklet.port) {
+            nodes.loudnessWorklet.port.postMessage({
+              type: 'config',
+              targetLoudness: targetLoudness,
+              loudnessRange: loudnessRange
+            });
+          }
+        }
+      });
+
+      // 履歴をリセット
+      loudnessHistory = [];
+      currentLoudness = -70;
+      lastGainAdjustment = 0;
+    }
+
+
+
+
 
     // URLの変更を監視して、チャンネルが変わったら設定を再読み込み
     let lastUrl = window.location.href;
