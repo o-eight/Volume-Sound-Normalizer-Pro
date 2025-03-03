@@ -237,24 +237,24 @@ document.addEventListener('DOMContentLoaded', function () {
   // 設定保存の処理
   function saveSettings(saveForChannel, saveAsDefault) {
     const settings = getCurrentSettings();
-    
+
     // 保存中の状態表示
     showSaveNotification('設定を保存中...', false, true);
-    
+
     // 現在の設定を保存
     if (saveForChannel && currentChannelId) {
       const channelSettingsKey = `channel_${currentChannelId}`;
-      
+
       // まず設定をストレージに直接保存
       chrome.storage.sync.set({
         [channelSettingsKey]: settings
-      }, function() {
+      }, function () {
         if (chrome.runtime.lastError) {
           console.error('設定保存エラー:', chrome.runtime.lastError);
           showSaveNotification('設定の保存に失敗しました: ' + chrome.runtime.lastError.message, true);
           return;
         }
-        
+
         // 次に現在のタブに設定変更を通知
         sendSettingsToTab(settings, saveForChannel, saveAsDefault);
       });
@@ -262,13 +262,13 @@ document.addEventListener('DOMContentLoaded', function () {
       // デフォルト設定を保存
       chrome.storage.sync.set({
         'default': settings
-      }, function() {
+      }, function () {
         if (chrome.runtime.lastError) {
           console.error('デフォルト設定保存エラー:', chrome.runtime.lastError);
           showSaveNotification('デフォルト設定の保存に失敗しました: ' + chrome.runtime.lastError.message, true);
           return;
         }
-        
+
         // 現在のタブに設定変更を通知
         sendSettingsToTab(settings, saveForChannel, saveAsDefault);
       });
@@ -287,23 +287,23 @@ document.addEventListener('DOMContentLoaded', function () {
         showSaveNotification('アクティブなタブが見つかりません。', true);
         return;
       }
-      
+
       // コンテンツスクリプトが有効かどうかを最初にチェック
-      chrome.tabs.sendMessage(tabs[0].id, { action: 'ping' }, function(response) {
+      chrome.tabs.sendMessage(tabs[0].id, { action: 'ping' }, function (response) {
         if (chrome.runtime.lastError) {
           console.error('コンテンツスクリプトとの通信エラー:', chrome.runtime.lastError);
-          
+
           // ユーザーに対してよりわかりやすいエラーメッセージを表示
           let errorMsg = 'ページとの通信に失敗しました。ページの再読み込みが必要かもしれません。';
           if (chrome.runtime.lastError.message.includes('receiving end does not exist')) {
             errorMsg = 'コンテンツスクリプトが読み込まれていません。ページを更新してください。';
           }
-          
+
           showSaveNotification(errorMsg, true);
           addRefreshPageButton();
           return;
         }
-        
+
         // コンテンツスクリプトが応答したので設定を送信
         chrome.tabs.sendMessage(tabs[0].id, {
           action: 'updateCompressorSettings',
@@ -317,12 +317,12 @@ document.addEventListener('DOMContentLoaded', function () {
             addRefreshPageButton();
             return;
           }
-          
+
           // 成功したら通知を表示
-          const successMessage = saveForChannel ? 
-            '選択したチャンネルに設定を保存しました' : 
+          const successMessage = saveForChannel ?
+            '選択したチャンネルに設定を保存しました' :
             (saveAsDefault ? 'デフォルト設定を保存しました' : '設定を適用しました');
-          
+
           showSaveNotification(successMessage);
         });
       });
@@ -336,7 +336,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (existingStatus) {
       document.body.removeChild(existingStatus);
     }
-    
+
     // 新しい通知を作成
     const status = document.createElement('div');
     status.id = 'status-notification';
@@ -348,7 +348,7 @@ document.addEventListener('DOMContentLoaded', function () {
     status.style.textAlign = 'center';
     status.style.backgroundColor = isError ? '#ffeeee' : (isLoading ? '#e6f7ff' : '#eeffee');
     status.style.border = `1px solid ${isError ? '#ffcccc' : (isLoading ? '#b3e0ff' : '#ccffcc')}`;
-    
+
     // ローディング中はアイコンを追加
     if (isLoading) {
       const loadingText = document.createTextNode(' ');
@@ -360,7 +360,7 @@ document.addEventListener('DOMContentLoaded', function () {
       status.appendChild(loadingSpinner);
       status.appendChild(loadingText);
       status.appendChild(document.createTextNode(message));
-      
+
       // スピナーアニメーションのためのスタイルを追加
       const style = document.createElement('style');
       style.textContent = `
@@ -371,9 +371,9 @@ document.addEventListener('DOMContentLoaded', function () {
       `;
       document.head.appendChild(style);
     }
-    
+
     document.body.appendChild(status);
-    
+
     // エラーでなく、ローディング中でもない場合は、通知を2秒後に消す
     if (!isError && !isLoading) {
       setTimeout(function () {
@@ -391,12 +391,12 @@ document.addEventListener('DOMContentLoaded', function () {
     if (existingButton) {
       document.body.removeChild(existingButton);
     }
-    
+
     const container = document.createElement('div');
     container.id = 'refresh-page-button-container';
     container.style.marginTop = '15px';
     container.style.textAlign = 'center';
-    
+
     const refreshButton = document.createElement('button');
     refreshButton.textContent = 'ページを更新して再接続';
     refreshButton.style.padding = '8px 12px';
@@ -405,29 +405,29 @@ document.addEventListener('DOMContentLoaded', function () {
     refreshButton.style.border = 'none';
     refreshButton.style.borderRadius = '4px';
     refreshButton.style.cursor = 'pointer';
-    
-    refreshButton.addEventListener('click', function() {
-      chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
+
+    refreshButton.addEventListener('click', function () {
+      chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
         if (tabs && tabs.length > 0) {
           chrome.tabs.reload(tabs[0].id);
           window.close(); // ポップアップを閉じる
         }
       });
     });
-    
+
     container.appendChild(refreshButton);
     document.body.appendChild(container);
   }
 
   // 初期化時にコンテンツスクリプトへの接続を確認
   function checkContentScriptConnection() {
-    chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
       if (!tabs || !tabs.length) {
         showSaveNotification('アクティブなタブが見つかりません。', true);
         return;
       }
-      
-      chrome.tabs.sendMessage(tabs[0].id, { action: 'ping' }, function(response) {
+
+      chrome.tabs.sendMessage(tabs[0].id, { action: 'ping' }, function (response) {
         if (chrome.runtime.lastError) {
           console.error('コンテンツスクリプト接続エラー:', chrome.runtime.lastError);
           showSaveNotification('ページとの接続に失敗しました。ページの更新が必要です。', true);
@@ -437,30 +437,83 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // スライダーの値が変更されたときに表示を更新
+
+  // 既存のスライダーイベントリスナーを修正し、値の変更時に設定を更新する
   thresholdSlider.addEventListener('input', function () {
     thresholdValue.textContent = this.value;
+    updateSettingsRealtime();
   });
 
   ratioSlider.addEventListener('input', function () {
     ratioValue.textContent = this.value;
+    updateSettingsRealtime();
   });
 
   attackSlider.addEventListener('input', function () {
     attackValue.textContent = this.value;
+    updateSettingsRealtime();
   });
 
   releaseSlider.addEventListener('input', function () {
     releaseValue.textContent = this.value;
+    updateSettingsRealtime();
   });
 
   kneeSlider.addEventListener('input', function () {
     kneeValue.textContent = this.value;
+    updateSettingsRealtime();
   });
 
   makeupGainSlider.addEventListener('input', function () {
     makeupGainValue.textContent = this.value;
+    updateSettingsRealtime();
   });
+
+  // コンプレッサーの有効/無効切り替えもリアルタイムで適用
+  compressorEnabled.addEventListener('change', function () {
+    updateSettingsRealtime();
+  });
+
+  // リアルタイム更新用の関数を追加
+  let updateTimeout = null;
+  function updateSettingsRealtime() {
+    // 連続した更新をまとめるために少し遅延を入れる（パフォーマンス向上）
+    if (updateTimeout) {
+      clearTimeout(updateTimeout);
+    }
+
+    updateTimeout = setTimeout(function () {
+      const settings = getCurrentSettings();
+
+      // コンテンツスクリプトに更新を送信（保存しない）
+      chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+        if (!tabs || !tabs.length) {
+          console.error('アクティブなタブが見つかりません');
+          return;
+        }
+
+        chrome.tabs.sendMessage(tabs[0].id, {
+          action: 'updateCompressorSettings',
+          settings: settings,
+          saveForChannel: false,
+          saveAsDefault: false
+        }, function (response) {
+          if (chrome.runtime.lastError) {
+            console.error('リアルタイム設定更新エラー:', chrome.runtime.lastError);
+            // エラーが続く場合はステータス表示（一時的にしておく）
+            showSaveNotification('設定の更新に失敗しました', true);
+            setTimeout(() => {
+              const status = document.getElementById('status-notification');
+              if (status) document.body.removeChild(status);
+            }, 1000);
+          }
+        });
+      });
+    }, 50); // 50ms遅延（スムーズな更新のバランス）
+  }
+
+  // 既存のsaveSettings関数は残しておきます
+  // これは設定を永続的に保存するために使用します
 
   // デフォルトとして保存ボタンのクリックイベント
   saveButton.addEventListener('click', function () {

@@ -36,6 +36,9 @@
       makeupGain: 0
     };
     let compressorSettings = { ...defaultSettings };
+    
+    // リアルタイム更新のスロットリング用
+    let updateThrottleTimeout = null;
 
     // 検出メソッドを追跡する変数を追加
     let lastDetectionMethod = '';
@@ -271,8 +274,6 @@
       }
     }
 
-
-
     // チャンネル固有の設定キーを作成
     function getChannelSettingsKey(channelId) {
       return channelId ? `channel_${channelId}` : 'default';
@@ -331,8 +332,6 @@
       return '';
     }
 
-
-
     // メッセージリスナーを改善
     chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
       console.log('コンテンツスクリプトがメッセージを受信:', request.action);
@@ -351,9 +350,16 @@
           // 設定を更新
           compressorSettings = request.settings;
 
-          // コンプレッサーの設定を適用
-          updateCompressorSettings();
-          toggleCompressor(compressorSettings.enabled);
+          // 連続した更新をスロットリング
+          if (updateThrottleTimeout) {
+            clearTimeout(updateThrottleTimeout);
+          }
+
+          updateThrottleTimeout = setTimeout(() => {
+            // コンプレッサーの設定を適用
+            updateCompressorSettings();
+            toggleCompressor(compressorSettings.enabled);
+          }, 20); // 20msのスロットリング
 
           // チャンネル固有の設定を保存
           if (request.saveForChannel && currentChannelId) {
@@ -538,21 +544,33 @@
       }
     }
 
-    // 既存の接続を更新する関数
+    // より効率的なコンプレッサー設定更新関数
     function updateCompressorSettings() {
+      // 更新の最適化のため、接続されたビデオが存在する場合のみ処理を行う
+      if (videoElements.length === 0 || connectedVideos.size === 0) {
+        return;
+      }
+
+      // 現在再生中のビデオのみを更新（リソース節約）
       videoElements.forEach(video => {
-        if (connectedVideos.has(video)) {
+        if (connectedVideos.has(video) && !video.paused) {
           const nodes = connectedVideos.get(video);
 
-          // コンプレッサーの設定を更新
-          nodes.compressor.threshold.value = compressorSettings.threshold;
-          nodes.compressor.ratio.value = compressorSettings.ratio;
-          nodes.compressor.attack.value = compressorSettings.attack / 1000;
-          nodes.compressor.release.value = compressorSettings.release / 1000;
-          nodes.compressor.knee.value = compressorSettings.knee;
+          // AudioParamの変化を滑らかにするために時間を設定
+          // 即時変更ではなく少し時間をかけて変化させる
+          const now = audioContext.currentTime;
+          const transitionTime = 0.05; // 50ミリ秒の滑らかな遷移
 
-          // メイクアップゲインの更新 (dBをリニアゲインに変換)
-          nodes.gain.gain.value = Math.pow(10, compressorSettings.makeupGain / 20);
+          // 各パラメータを徐々に変更
+          nodes.compressor.threshold.linearRampToValueAtTime(compressorSettings.threshold, now + transitionTime);
+          nodes.compressor.ratio.linearRampToValueAtTime(compressorSettings.ratio, now + transitionTime);
+          nodes.compressor.attack.linearRampToValueAtTime(compressorSettings.attack / 1000, now + transitionTime);
+          nodes.compressor.release.linearRampToValueAtTime(compressorSettings.release / 1000, now + transitionTime);
+          nodes.compressor.knee.linearRampToValueAtTime(compressorSettings.knee, now + transitionTime);
+
+          // メイクアップゲインも滑らかに変更
+          const newGain = Math.pow(10, compressorSettings.makeupGain / 20);
+          nodes.gain.gain.linearRampToValueAtTime(newGain, now + transitionTime);
         }
       });
     }
@@ -586,8 +604,6 @@
     // URLの変更を監視して、チャンネルが変わったら設定を再読み込み
     let lastUrl = window.location.href;
     let lastChannelId = '';
-
-
 
     // 定期的にURLの変更をチェック（YouTube SPAの遷移に対応）
     setInterval(checkForNavigationChanges, 1000);
