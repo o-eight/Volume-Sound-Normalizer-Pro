@@ -359,11 +359,14 @@
 
         // ノードを接続
         if (compressorSettings.enabled) {
+          // コンプレッサーとゲインの両方を適用
           sourceNode.connect(compressorNode);
           compressorNode.connect(gainNode);
           gainNode.connect(audioContext.destination);
         } else {
-          sourceNode.connect(audioContext.destination);
+          // コンプレッサーなしでゲイン（音量調整）のみを適用
+          sourceNode.connect(gainNode);
+          gainNode.connect(audioContext.destination);
         }
 
         // 接続情報を保存
@@ -411,11 +414,14 @@
           
           // 有効/無効に応じて再接続
           if (enabled) {
+            // コンプレッサーとゲイン両方適用
             nodes.source.connect(nodes.compressor);
             nodes.compressor.connect(nodes.gain);
             nodes.gain.connect(audioContext.destination);
           } else {
-            nodes.source.connect(audioContext.destination);
+            // コンプレッサーなしでゲイン（音量調整）のみを適用
+            nodes.source.connect(nodes.gain);
+            nodes.gain.connect(audioContext.destination);
           }
         }
       });
