@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>オーディオコンプレッサー設定</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      width: 300px;
+      padding: 10px;
+    }
+    .slider-container {
+      margin-bottom: 15px;
+    }
+    label {
+      display: inline-block;
+      width: 120px;
+      margin-bottom: 5px;
+    }
+    input[type="range"] {
+      width: 150px;
+    }
+    .value-display {
+      display: inline-block;
+      width: 40px;
+      text-align: right;
+    }
+    .toggle-container {
+      display: flex;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 50px;
+      height: 24px;
+      margin-right: 10px;
+    }
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: .4s;
+      border-radius: 24px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 4px;
+      bottom: 4px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+    }
+    input:checked + .slider {
+      background-color: #2196F3;
+    }
+    input:checked + .slider:before {
+      transform: translateX(26px);
+    }
+    button {
+      width: 100%;
+      padding: 8px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-bottom: 5px;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    .channel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .refresh-button {
+      width: auto;
+      padding: 4px 8px;
+      margin: 0;
+      background-color: #2196F3;
+    }
+    .refresh-button:hover {
+      background-color: #0b7dda;
+    }
+  </style>
+</head>
+<body>
+  <h2>オーディオコンプレッサー</h2>
+  
+  <div class="toggle-container">
+    <label class="switch">
+      <input type="checkbox" id="compressor-enabled">
+      <span class="slider"></span>
+    </label>
+    <span>コンプレッサーを有効化</span>
+  </div>
+
+  <div class="slider-container">
+    <label for="threshold">閾値 (dB):</label>
+    <input type="range" id="threshold" min="-60" max="0" value="-24" step="1">
+    <span class="value-display" id="threshold-value">-24</span>
+  </div>
+
+  <div class="slider-container">
+    <label for="ratio">比率:</label>
+    <input type="range" id="ratio" min="1" max="20" value="4" step="0.5">
+    <span class="value-display" id="ratio-value">4</span>
+  </div>
+
+  <div class="slider-container">
+    <label for="attack">アタック (ms):</label>
+    <input type="range" id="attack" min="0" max="1000" value="50" step="1">
+    <span class="value-display" id="attack-value">50</span>
+  </div>
+
+  <div class="slider-container">
+    <label for="release">リリース (ms):</label>
+    <input type="range" id="release" min="0" max="1000" value="250" step="1">
+    <span class="value-display" id="release-value">250</span>
+  </div>
+
+  <div class="slider-container">
+    <label for="knee">ニー幅 (dB):</label>
+    <input type="range" id="knee" min="0" max="40" value="5" step="1">
+    <span class="value-display" id="knee-value">5</span>
+  </div>
+
+  <div class="slider-container">
+    <label for="makeup-gain">メイクアップゲイン (dB):</label>
+    <input type="range" id="makeup-gain" min="0" max="30" value="0" step="0.5">
+    <span class="value-display" id="makeup-gain-value">0</span>
+  </div>
+
+  <div id="channel-info" style="margin-top: 15px; display: none;">
+    <div class="channel-header">
+      <strong>現在のチャンネル:</strong>
+      <button id="refresh-channel" class="refresh-button" title="チャンネル情報を更新">🔄</button>
+    </div>
+    <p><span id="channel-name">なし</span></p>
+    <div style="display: flex; justify-content: space-between;">
+      <button id="save-channel" style="width: 48%; background-color: #2196F3;">チャンネルに保存</button>
+      <button id="save-settings" style="width: 48%;">デフォルトとして保存</button>
+    </div>
+  </div>
+  
+  <div id="non-youtube-info" style="margin-top: 15px;">
+    <button id="save-settings-general" style="width: 100%;">設定を保存</button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

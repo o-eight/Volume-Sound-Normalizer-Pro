@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "Audio Compressor for HTML5 Video",
+  "version": "1.0",
+  "description": "YouTubeなどのHTML5ビデオの音声にコンプレッサーをかける拡張機能",
+  "permissions": ["activeTab", "storage", "tabs"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "images/icon16.png",
+      "48": "images/icon48.png",
+      "128": "images/icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.youtube.com/*", "<all_urls>"],
+      "js": ["content.js"]
+    }
+  ],
+  "icons": {
+    "16": "images/icon16.png",
+    "48": "images/icon48.png",
+    "128": "images/icon128.png"
+  },
+  "host_permissions": ["*://*.youtube.com/*"],
+  "externally_connectable": {
+    "matches": ["*://*.youtube.com/*"]
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["popup.html", "popup.js"],
+      "matches": ["*://*.youtube.com/*"]
+    }
+  ]
+}
