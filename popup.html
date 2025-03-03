@@ -136,6 +136,13 @@
       border-radius: 4px;
       margin-bottom: 15px;
     }
+    .debug-info {
+      font-size: 11px;
+      color: #666;
+      margin-top: 5px;
+      font-family: monospace;
+      word-break: break-all;
+    }
   </style>
 </head>
 <body>
@@ -193,9 +200,13 @@
   <div id="channel-info" style="margin-top: 15px; display: none;">
     <div class="channel-header">
       <strong>現在のチャンネル:</strong>
+      <button id="refresh-channel" class="refresh-button">更新</button>
     </div>
     <p><span id="channel-name">なし</span></p>
-    <div style="display: flex; justify-content: space-between;">
+    <div class="debug-info">
+      <span>取得方法: </span><span id="detection-method">不明</span>
+    </div>
+    <div style="display: flex; justify-content: space-between; margin-top: 10px;">
       <button id="save-channel" style="width: 48%; background-color: #2196F3;">チャンネルに保存</button>
       <button id="save-settings" style="width: 48%;">デフォルトとして保存</button>
     </div>
