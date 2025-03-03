@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <meta charset="utf-8">
   <title>オーディオコンプレッサー設定</title>
@@ -9,27 +10,33 @@
       width: 300px;
       padding: 10px;
     }
+
     .slider-container {
       margin-bottom: 15px;
     }
+
     label {
       display: inline-block;
       width: 120px;
       margin-bottom: 5px;
     }
+
     input[type="range"] {
       width: 150px;
     }
+
     .value-display {
       display: inline-block;
       width: 40px;
       text-align: right;
     }
+
     .toggle-container {
       display: flex;
       align-items: center;
       margin-bottom: 15px;
     }
+
     .switch {
       position: relative;
       display: inline-block;
@@ -37,11 +44,13 @@
       height: 24px;
       margin-right: 10px;
     }
+
     .switch input {
       opacity: 0;
       width: 0;
       height: 0;
     }
+
     .slider {
       position: absolute;
       cursor: pointer;
@@ -53,6 +62,7 @@
       transition: .4s;
       border-radius: 24px;
     }
+
     .slider:before {
       position: absolute;
       content: "";
@@ -64,12 +74,15 @@
       transition: .4s;
       border-radius: 50%;
     }
-    input:checked + .slider {
+
+    input:checked+.slider {
       background-color: #2196F3;
     }
-    input:checked + .slider:before {
+
+    input:checked+.slider:before {
       transform: translateX(26px);
     }
+
     button {
       width: 100%;
       padding: 8px;
@@ -80,14 +93,17 @@
       cursor: pointer;
       margin-bottom: 5px;
     }
+
     button:hover {
       background-color: #45a049;
     }
+
     .channel-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
+
     /* 折りたたみパネル用のスタイル */
     .collapsible {
       background-color: #f1f1f1;
@@ -105,15 +121,19 @@
       justify-content: space-between;
       align-items: center;
     }
+
     .collapsible:after {
       content: '+';
       font-size: 16px;
       font-weight: bold;
     }
+
     .active:after {
       content: '−';
     }
-    .advanced-settings, .loudness-settings {
+
+    .advanced-settings,
+    .loudness-settings {
       padding: 0 10px;
       max-height: 0;
       overflow: hidden;
@@ -121,12 +141,14 @@
       background-color: #f9f9f9;
       border-radius: 0 0 4px 4px;
     }
+
     .main-controls {
       background-color: #f9f9f9;
       padding: 10px;
       border-radius: 4px;
       margin-bottom: 15px;
     }
+
     .debug-info {
       font-size: 11px;
       color: #666;
@@ -134,6 +156,7 @@
       font-family: monospace;
       word-break: break-all;
     }
+
     /* ラウドネスメーター用のスタイル */
     .loudness-meter {
       height: 16px;
@@ -144,12 +167,14 @@
       margin: 10px 0;
       position: relative;
     }
+
     .loudness-bar {
       height: 100%;
       width: 0%;
       background: linear-gradient(to right, #4CAF50, #FFEB3B, #F44336);
       transition: width 0.3s ease;
     }
+
     .loudness-target {
       position: absolute;
       top: 0;
@@ -158,6 +183,7 @@
       background: #000;
       z-index: 1;
     }
+
     .loudness-range {
       position: absolute;
       top: 0;
@@ -165,20 +191,23 @@
       background: rgba(0, 0, 0, 0.1);
       z-index: 0;
     }
+
     .feature-section {
       border-bottom: 1px solid #eee;
       padding-bottom: 15px;
       margin-bottom: 15px;
     }
+
     .section-title {
       font-weight: bold;
       margin-bottom: 10px;
     }
   </style>
 </head>
+
 <body>
   <h2>Volume & Sound Normalizer</h2>
-  
+
   <div class="main-controls">
     <!-- 音量調整セクション -->
     <div class="feature-section">
@@ -196,7 +225,7 @@
         <span class="value-display" id="makeup-gain-value">0</span>
       </div>
     </div>
-    
+
     <!-- ラウドネスノーマライズセクション（新規追加） -->
     <div class="feature-section">
       <div class="toggle-container">
@@ -206,7 +235,7 @@
         </label>
         <span>ラウドネスノーマライズを有効化</span>
       </div>
-      
+
       <!-- ラウドネスメーター -->
       <div class="loudness-meter">
         <div class="loudness-range" id="loudness-range"></div>
@@ -214,19 +243,19 @@
         <div class="loudness-bar" id="loudness-bar"></div>
       </div>
       <div style="display: flex; justify-content: space-between; font-size: 11px;">
-        <span>-40 LUFS</span>
+        <span>-60 LUFS</span>
         <span id="current-loudness-value">N/A</span>
         <span>0 LUFS</span>
       </div>
     </div>
   </div>
 
-  <!-- ラウドネス設定（新規追加） -->
+  <!-- ラウドネス設定 (折りたたみパネル) -->
   <button class="collapsible" id="loudness-collapsible">ラウドネス設定</button>
   <div class="loudness-settings">
     <div class="slider-container">
       <label for="target-loudness">目標レベル (LUFS):</label>
-      <input type="range" id="target-loudness" min="-24" max="-6" value="-14" step="0.5">
+      <input type="range" id="target-loudness" min="-36" max="-6" value="-14" step="0.5">
       <span class="value-display" id="target-loudness-value">-14</span>
     </div>
 
@@ -237,7 +266,7 @@
     </div>
   </div>
 
-  <!-- コンプレッサー詳細設定 -->
+  <!-- コンプレッサー詳細設定 (折りたたみパネル) -->
   <button class="collapsible" id="advanced-collapsible">コンプレッサー詳細設定</button>
   <div class="advanced-settings">
     <div class="slider-container">
@@ -284,11 +313,12 @@
       <button id="save-settings" style="width: 48%;">デフォルトとして保存</button>
     </div>
   </div>
-  
+
   <div id="non-youtube-info" style="margin-top: 15px;">
     <button id="save-settings-general" style="width: 100%;">設定を保存</button>
   </div>
 
   <script src="popup.js"></script>
 </body>
+
 </html>

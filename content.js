@@ -27,8 +27,8 @@
     // ナビゲーション変更用のタイムアウト変数を追加
     let navigationChangeTimeout = null;
 
-    // content.js に追加する変更
-    // 初期化関数の変数定義部分に以下を追加:
+    // AudioContext の再開ハンドラーをセットアップ
+    setupAudioContextResume();
 
     // Web Audio APIのノード参照
     let audioContext;
@@ -78,15 +78,31 @@
     };
 
 
-    // AudioWorkletを初期化する関数
+
+    // AudioWorkletの初期化関数（改良版）
     async function initAudioWorklet() {
       if (!audioContext) {
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        try {
+          audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+          // AudioContextがサスペンド状態の場合は再開
+          if (audioContext.state === 'suspended') {
+            try {
+              await audioContext.resume();
+              console.log('AudioContext resumed from suspended state');
+            } catch (resumeErr) {
+              console.warn('Failed to resume AudioContext:', resumeErr);
+              // 再開失敗してもプロセスは続行
+            }
+          }
+        } catch (ctxErr) {
+          console.error('Failed to create AudioContext:', ctxErr);
+          return false;
+        }
       }
 
       if (!workletInitialized) {
         try {
-          // AudioWorkletProcessorモジュールのURLを作成
           // Chrome拡張機能内のファイルへのURLを取得
           const workletUrl = chrome.runtime.getURL('loudness-processor.js');
 
@@ -96,8 +112,16 @@
           console.log('AudioWorklet initialized successfully');
         } catch (error) {
           console.error('Failed to initialize AudioWorklet:', error);
-          // AudioWorkletの初期化に失敗した場合はフラグをリセット
+
+          // 特定のエラーの処理
+          if (error.name === 'NotSupportedError') {
+            console.warn('AudioWorklet is not supported in this browser');
+          } else if (error.name === 'SecurityError') {
+            console.warn('AudioWorklet blocked by security policy');
+          }
+
           workletInitialized = false;
+          return false;
         }
       }
 
@@ -278,6 +302,46 @@
       console.log('チャンネルIDの取得に失敗しました');
       return { id: channelName || channelId || 'unknown', name: channelName, method: detectionMethod || 'unknown' };
     }
+
+
+
+    // AudioContext再開のヘルパー関数を追加
+    async function resumeAudioContext() {
+      if (audioContext && audioContext.state === 'suspended') {
+        try {
+          await audioContext.resume();
+          return true;
+        } catch (error) {
+          console.error('Error resuming AudioContext:', error);
+          return false;
+        }
+      }
+      return audioContext ? audioContext.state === 'running' : false;
+    }
+
+
+
+    // ページに対するユーザーインタラクションを検出して AudioContext を再開するためのハンドラー
+    function setupAudioContextResume() {
+      const resumeEvents = ['click', 'touchstart', 'keydown'];
+
+      const resumeAudioContextHandler = async () => {
+        const resumed = await resumeAudioContext();
+        if (resumed) {
+          console.log('AudioContext resumed after user interaction');
+          // イベントリスナーを削除（一度再開したら不要）
+          resumeEvents.forEach(eventType => {
+            document.removeEventListener(eventType, resumeAudioContextHandler);
+          });
+        }
+      };
+
+      // ユーザーインタラクションイベントでAudioContextを再開
+      resumeEvents.forEach(eventType => {
+        document.addEventListener(eventType, resumeAudioContextHandler, { once: false, passive: true });
+      });
+    }
+
 
     // 要素が表示されているかどうかを確認するヘルパー関数
     function isElementVisible(element) {
@@ -497,171 +561,252 @@
     }
 
 
-    // 動画にコンプレッサーを適用する関数（更新版）
+    // content.js の修正バージョン - オーディオ処理部分のエラーハンドリングを改善
+
+    // 動画にコンプレッサーを適用する関数（修正版）
     async function applyCompressorToVideo(videoElement) {
       try {
+        // ユーザーインタラクションが必要なブラウザ対応
         if (!audioContext) {
-          audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          try {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+            // AudioContextの状態確認とresume
+            if (audioContext.state === 'suspended') {
+              await audioContext.resume();
+              console.log('AudioContext resumed from suspended state');
+            }
+          } catch (err) {
+            console.error('Failed to create AudioContext:', err);
+            return; // 早期リターン - これ以上処理を続行できない
+          }
         }
 
-        // AudioWorkletが必要かつ初期化されていなければ初期化を試みる
+        // AudioWorkletの初期化（ラウドネスノーマライズが有効な場合）
         if (compressorSettings.loudnessNormEnabled && !workletInitialized) {
-          const initialized = await initAudioWorklet();
-          if (!initialized) {
-            console.warn('AudioWorklet initialization failed, loudness normalization disabled');
-            // 初期化に失敗した場合はラウドネスノーマライズを無効化
+          try {
+            const initialized = await initAudioWorklet();
+            if (!initialized) {
+              console.warn('AudioWorklet initialization failed, falling back to basic mode');
+              compressorSettings.loudnessNormEnabled = false;
+            }
+          } catch (err) {
+            console.error('AudioWorklet initialization error:', err);
             compressorSettings.loudnessNormEnabled = false;
           }
         }
 
-        // 既存のノードがある場合は切断
-        if (connectedVideos.has(videoElement)) {
-          const nodes = connectedVideos.get(videoElement);
-          nodes.source.disconnect();
+        // 既存の接続を切断する（安全に）
+        try {
+          if (connectedVideos.has(videoElement)) {
+            const nodes = connectedVideos.get(videoElement);
 
-          if (nodes.analyser) {
-            nodes.analyser.disconnect();
-          }
-
-          if (nodes.loudnessWorklet) {
-            nodes.loudnessWorklet.disconnect();
-            // Workletポートのイベントリスナーを削除
-            if (nodes.loudnessWorklet.port) {
-              nodes.loudnessWorklet.port.onmessage = null;
+            // 各ノードの接続を切断（nullチェック付き）
+            if (nodes.source) {
+              try { nodes.source.disconnect(); } catch (e) { console.warn('Error disconnecting source:', e); }
             }
-          }
 
-          nodes.gain.disconnect();
-          nodes.compressor.disconnect();
-        }
+            if (nodes.analyser) {
+              try { nodes.analyser.disconnect(); } catch (e) { console.warn('Error disconnecting analyser:', e); }
+            }
 
-        // 新しいノードを作成
-        sourceNode = audioContext.createMediaElementSource(videoElement);
-        compressorNode = audioContext.createDynamicsCompressor();
-        gainNode = audioContext.createGain();
-        analyserNode = audioContext.createAnalyser();
-        analyserNode.fftSize = 2048;
-
-        // AudioWorkletNodeの作成（ラウドネスノーマライズ有効時のみ）
-        if (compressorSettings.loudnessNormEnabled && workletInitialized) {
-          loudnessWorkletNode = new AudioWorkletNode(audioContext, 'loudness-processor');
-
-          // Workletから測定データを受信
-          loudnessWorkletNode.port.onmessage = (event) => {
-            if (event.data.type === 'measurement') {
-              // 測定されたラウドネス値を取得
-              const measuredLoudness = event.data.loudness;
-              currentLoudness = measuredLoudness;
-
-              // 目標ラウドネスとの差を計算
-              const loudnessDifference = compressorSettings.targetLoudness - measuredLoudness;
-
-              // 差が許容範囲内であれば調整しない
-              const withinRange = Math.abs(loudnessDifference) <= compressorSettings.loudnessRange / 2;
-
-              if (!withinRange) {
-                // 適用するゲイン調整値を計算（変化が緩やかになるよう制限）
-                const MAX_ADJUSTMENT = 0.5; // 一度に最大0.5dBまで調整
-                let gainAdjustment = Math.max(-MAX_ADJUSTMENT, Math.min(MAX_ADJUSTMENT, loudnessDifference * 0.1));
-
-                // 前回の調整値との平均をとり、変化を滑らかにする
-                gainAdjustment = (gainAdjustment + lastGainAdjustment) / 2;
-                lastGainAdjustment = gainAdjustment;
-
-                // ゲイン値を更新
-                const currentGainDb = compressorSettings.makeupGain;
-                const newGainDb = currentGainDb + gainAdjustment;
-
-                // ゲイン調整の範囲を制限 (-12dB から +12dB)
-                const limitedGainDb = Math.max(-12, Math.min(12, newGainDb));
-
-                // 音が大きすぎる場合は下げる、小さすぎる場合は上げる
-                if (newGainDb !== currentGainDb) {
-                  // 全てのビデオ要素に対して調整
-                  videoElements.forEach(video => {
-                    if (connectedVideos.has(video)) {
-                      const nodes = connectedVideos.get(video);
-                      const linearGain = Math.pow(10, limitedGainDb / 20);
-
-                      // 滑らかに変化させるため時間をかけて調整
-                      const now = audioContext.currentTime;
-                      nodes.gain.gain.linearRampToValueAtTime(linearGain, now + 0.1);
-                    }
-                  });
-
-                  // 設定も更新
-                  compressorSettings.makeupGain = limitedGainDb;
+            if (nodes.loudnessWorklet) {
+              try {
+                nodes.loudnessWorklet.disconnect();
+                // Workletのポートリスナーをクリーンアップ
+                if (nodes.loudnessWorklet.port) {
+                  nodes.loudnessWorklet.port.onmessage = null;
                 }
+              } catch (e) {
+                console.warn('Error disconnecting loudnessWorklet:', e);
               }
             }
-          };
 
-          // 現在の設定をWorkletに送信
-          loudnessWorkletNode.port.postMessage({
-            type: 'config',
-            targetLoudness: compressorSettings.targetLoudness,
-            loudnessRange: compressorSettings.loudnessRange
-          });
+            if (nodes.gain) {
+              try { nodes.gain.disconnect(); } catch (e) { console.warn('Error disconnecting gain:', e); }
+            }
+
+            if (nodes.compressor) {
+              try { nodes.compressor.disconnect(); } catch (e) { console.warn('Error disconnecting compressor:', e); }
+            }
+
+            // 接続マップからビデオ要素を削除
+            connectedVideos.delete(videoElement);
+          }
+        } catch (disconnectError) {
+          console.warn('Error during disconnection:', disconnectError);
+          // 切断エラーは致命的ではないため続行
         }
 
-        // コンプレッサーの設定を適用
-        compressorNode.threshold.value = compressorSettings.threshold;
-        compressorNode.ratio.value = compressorSettings.ratio;
-        compressorNode.attack.value = compressorSettings.attack / 1000; // msから秒に変換
-        compressorNode.release.value = compressorSettings.release / 1000; // msから秒に変換
-        compressorNode.knee.value = compressorSettings.knee;
-
-        // メイクアップゲインの設定 (dBをリニアゲインに変換)
-        gainNode.gain.value = Math.pow(10, compressorSettings.makeupGain / 20);
-
-        // ノードを接続 (ラウドネスノーマライズが有効な場合は分析ノードも含める)
-        if (compressorSettings.enabled) {
-          // オーディオパスの接続
-          sourceNode.connect(compressorNode);
-          compressorNode.connect(gainNode);
-
-          // ラウドネスノーマライズが有効かつWorkletが初期化されている場合
-          if (compressorSettings.loudnessNormEnabled && workletInitialized) {
-            // ラウドネス測定用の分岐パスを接続
-            gainNode.connect(analyserNode);
-            analyserNode.connect(loudnessWorkletNode);
-            // AudioWorkletにオーディオを送るが、出力はしない（パラレル処理）
-            gainNode.connect(audioContext.destination);
-          } else {
-            // 通常のオーディオパス
-            gainNode.connect(audioContext.destination);
+        try {
+          // 二重接続防止のためにチェック
+          if (videoElement._hasBeenConnected) {
+            console.warn('Video element has already been connected to AudioContext');
+            return;
           }
-        } else {
-          // コンプレッサーなしでゲイン（音量調整）のみを適用
-          sourceNode.connect(gainNode);
 
-          // ラウドネスノーマライズが有効かつWorkletが初期化されている場合
-          if (compressorSettings.loudnessNormEnabled && workletInitialized) {
-            // ラウドネス測定用の分岐パスを接続
-            gainNode.connect(analyserNode);
-            analyserNode.connect(loudnessWorkletNode);
-            // 通常のオーディオパス
-            gainNode.connect(audioContext.destination);
-          } else {
-            // 通常のオーディオパス
-            gainNode.connect(audioContext.destination);
-          }
+          // 新しいノードを作成
+          sourceNode = audioContext.createMediaElementSource(videoElement);
+          videoElement._hasBeenConnected = true; // 接続済みフラグを設定
+        } catch (sourceError) {
+          // このエラーが最も頻繁に発生 - 既に接続済みのソースを再接続しようとした場合など
+          console.error('Failed to create MediaElementSource:', sourceError);
+
+          // この場合は終了して、次の動画フレームで再試行できるようにする
+          return;
         }
 
-        // 接続情報を保存
-        connectedVideos.set(videoElement, {
-          source: sourceNode,
-          compressor: compressorNode,
-          gain: gainNode,
-          analyser: analyserNode,
-          loudnessWorklet: compressorSettings.loudnessNormEnabled && workletInitialized ? loudnessWorkletNode : null
-        });
+        // 残りのオーディオノードを作成
+        try {
+          compressorNode = audioContext.createDynamicsCompressor();
+          gainNode = audioContext.createGain();
+          analyserNode = audioContext.createAnalyser();
+          analyserNode.fftSize = 2048;
 
-        console.log('Audio processing applied to video element', videoElement);
-      } catch (error) {
-        console.error('Failed to apply audio processing to video:', error);
+          // ラウドネスノーマライズが有効かつWorkletが初期化されている場合はWorkletNodeを作成
+          let loudnessWorkletNode = null;
+          if (compressorSettings.loudnessNormEnabled && workletInitialized) {
+            try {
+              loudnessWorkletNode = new AudioWorkletNode(audioContext, 'loudness-processor');
+
+              // Workletからのメッセージハンドラを設定
+              loudnessWorkletNode.port.onmessage = (event) => {
+                if (event.data.type === 'measurement') {
+                  // 測定されたラウドネス値を取得
+                  const measuredLoudness = event.data.loudness;
+                  currentLoudness = measuredLoudness;
+
+                  // 目標ラウドネスとの差を計算
+                  const loudnessDifference = compressorSettings.targetLoudness - measuredLoudness;
+
+                  // 差が許容範囲内であれば調整しない
+                  const withinRange = Math.abs(loudnessDifference) <= compressorSettings.loudnessRange / 2;
+
+                  if (!withinRange) {
+                    // 適用するゲイン調整値を計算（変化が緩やかになるよう制限）
+                    const MAX_ADJUSTMENT = 0.5; // 一度に最大0.5dBまで調整
+
+                    // より低いLUFSターゲットの場合、調整係数を小さく（より慎重に）
+                    const adjustmentFactor = compressorSettings.targetLoudness < -24 ? 0.05 : 0.1;
+                    let gainAdjustment = Math.max(-MAX_ADJUSTMENT, Math.min(MAX_ADJUSTMENT, loudnessDifference * adjustmentFactor));
+
+
+                    // 前回の調整値との平均をとり、変化を滑らかにする
+                    gainAdjustment = (gainAdjustment + lastGainAdjustment) / 2;
+                    lastGainAdjustment = gainAdjustment;
+
+                    // ゲイン値を更新
+                    const currentGainDb = compressorSettings.makeupGain;
+                    const newGainDb = currentGainDb + gainAdjustment;
+
+                    // ゲイン調整の範囲を拡張 (-12dB から +24dB) - 低いLUFSを実現するために上限を拡大
+                    const limitedGainDb = Math.max(-12, Math.min(24, newGainDb));
+
+                    // 音が大きすぎる場合は下げる、小さすぎる場合は上げる
+                    if (newGainDb !== currentGainDb) {
+                      try {
+                        // ゲインノードのみを調整（すべてのビデオに適用する代わりに現在のビデオのみ）
+                        const linearGain = Math.pow(10, limitedGainDb / 20);
+
+                        // 滑らかに変化させるため時間をかけて調整
+                        const now = audioContext.currentTime;
+                        gainNode.gain.linearRampToValueAtTime(linearGain, now + 0.1);
+
+                        // 設定も更新
+                        compressorSettings.makeupGain = limitedGainDb;
+                      } catch (gainError) {
+                        console.warn('Error adjusting gain:', gainError);
+                      }
+                    }
+                  }
+                }
+              };
+
+              // 設定をWorkletに送信
+              loudnessWorkletNode.port.postMessage({
+                type: 'config',
+                targetLoudness: compressorSettings.targetLoudness,
+                loudnessRange: compressorSettings.loudnessRange
+              });
+            } catch (workletError) {
+              console.error('Failed to create AudioWorkletNode:', workletError);
+              loudnessWorkletNode = null;
+              compressorSettings.loudnessNormEnabled = false;
+            }
+          }
+
+          // コンプレッサーの設定を適用
+          compressorNode.threshold.value = compressorSettings.threshold;
+          compressorNode.ratio.value = compressorSettings.ratio;
+          compressorNode.attack.value = compressorSettings.attack / 1000; // msから秒に変換
+          compressorNode.release.value = compressorSettings.release / 1000; // msから秒に変換
+          compressorNode.knee.value = compressorSettings.knee;
+
+          // メイクアップゲインの設定 (dBをリニアゲインに変換)
+          gainNode.gain.value = Math.pow(10, compressorSettings.makeupGain / 20);
+
+          // ノードの接続 - エラーハンドリング付き
+          try {
+            // 基本的な接続パス
+            if (compressorSettings.enabled) {
+              // コンプレッサーを含むパス
+              sourceNode.connect(compressorNode);
+              compressorNode.connect(gainNode);
+            } else {
+              // コンプレッサーなしのパス
+              sourceNode.connect(gainNode);
+            }
+
+            // ラウドネス測定が有効な場合の追加パス
+            if (compressorSettings.loudnessNormEnabled && loudnessWorkletNode) {
+              // メイン出力パス
+              gainNode.connect(audioContext.destination);
+
+              // 分析用の並列パス
+              gainNode.connect(analyserNode);
+              analyserNode.connect(loudnessWorkletNode);
+            } else {
+              // 標準出力パス
+              gainNode.connect(audioContext.destination);
+            }
+
+            // 接続情報を保存
+            connectedVideos.set(videoElement, {
+              source: sourceNode,
+              compressor: compressorNode,
+              gain: gainNode,
+              analyser: analyserNode,
+              loudnessWorklet: loudnessWorkletNode
+            });
+
+            console.log('Audio processing successfully applied to video element', videoElement);
+          } catch (connectionError) {
+            console.error('Failed to connect audio nodes:', connectionError);
+            // 接続失敗時の後処理
+            try {
+              if (sourceNode) sourceNode.disconnect();
+              if (compressorNode) compressorNode.disconnect();
+              if (gainNode) gainNode.disconnect();
+              if (analyserNode) analyserNode.disconnect();
+              if (loudnessWorkletNode) loudnessWorkletNode.disconnect();
+            } catch (e) {
+              console.warn('Error during cleanup after connection failure:', e);
+            }
+          }
+        } catch (nodeCreationError) {
+          console.error('Failed to create audio processing nodes:', nodeCreationError);
+          // 基本的なクリーンアップ
+          if (sourceNode) {
+            try { sourceNode.disconnect(); } catch (e) { }
+          }
+        }
+      } catch (mainError) {
+        console.error('Failed to apply audio processing to video:', mainError);
+        // メインエラーが発生した場合、特別な処理は行わない
+        // すでに内部のエラーハンドリングで対応済み
       }
     }
+
 
 
     // より効率的なコンプレッサー設定更新関数
@@ -835,36 +980,68 @@
 
 
 
-    // ラウドネスノーマライズの有効/無効を切り替える関数を更新
+    // toggleLoudnessNormalization 関数も改善
     async function toggleLoudnessNormalization(enabled) {
+      // 前の状態を保存
+      const previousState = compressorSettings.loudnessNormEnabled;
+
+      // 新しい状態を設定
       compressorSettings.loudnessNormEnabled = enabled;
 
-      if (enabled && !workletInitialized) {
-        // 有効化時にWorkletが初期化されていなければ初期化を試みる
-        const initialized = await initAudioWorklet();
-        if (!initialized) {
-          console.warn('AudioWorklet initialization failed, loudness normalization disabled');
-          compressorSettings.loudnessNormEnabled = false;
-          return false;
+      if (enabled) {
+        // AudioContextの状態チェック
+        if (audioContext && audioContext.state === 'suspended') {
+          try {
+            await audioContext.resume();
+          } catch (error) {
+            console.warn('Failed to resume AudioContext:', error);
+            // ユーザーに通知が必要かもしれない
+          }
+        }
+
+        // Workletの初期化
+        if (!workletInitialized) {
+          try {
+            const initialized = await initAudioWorklet();
+            if (!initialized) {
+              console.warn('AudioWorklet initialization failed, loudness normalization disabled');
+              compressorSettings.loudnessNormEnabled = false;
+              return false;
+            }
+          } catch (error) {
+            console.error('Error during AudioWorklet initialization:', error);
+            compressorSettings.loudnessNormEnabled = false;
+            return false;
+          }
         }
       }
 
-      // 履歴をリセット
-      loudnessHistory = [];
-      currentLoudness = -70;
-      lastGainAdjustment = 0;
+      // 状態変更がある場合のみ再接続
+      if (previousState !== compressorSettings.loudnessNormEnabled) {
+        // 履歴をリセット
+        loudnessHistory = [];
+        currentLoudness = -70;
+        lastGainAdjustment = 0;
 
-      // 既存の接続を更新
-      videoElements.forEach(video => {
-        if (connectedVideos.has(video) && !video.paused) {
-          // すでに接続されている場合は、再適用して接続を更新
-          applyCompressorToVideo(video);
+        // 既存の接続を更新
+        let updateSuccess = true;
+        for (const video of videoElements) {
+          if (connectedVideos.has(video) && !video.paused) {
+            try {
+              // すでに接続されている場合は、再適用して接続を更新
+              await applyCompressorToVideo(video);
+            } catch (error) {
+              console.error('Failed to update audio processing for video:', error);
+              updateSuccess = false;
+            }
+          }
         }
-      });
+
+        return updateSuccess;
+      }
 
       return true;
     }
-
 
     // ラウドネスノーマライズの設定を更新する関数
     function updateLoudnessSettings(targetLoudness, loudnessRange) {

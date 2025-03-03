@@ -291,11 +291,12 @@ document.addEventListener('DOMContentLoaded', function () {
     };
   }
 
+
   // ラウドネスメーターのターゲットマーカーを更新
   function updateLoudnessMeterTarget() {
     const targetLufs = parseFloat(targetLoudnessSlider.value);
-    // LUFSスケールを0〜-40の表示範囲に変換（0が右端、-40が左端）
-    const position = (1 - Math.abs(targetLufs) / 40) * 100;
+    // LUFSスケールを0〜-60の表示範囲に変換（0が右端、-60が左端）
+    const position = (1 - Math.abs(targetLufs) / 60) * 100;
     loudnessTarget.style.left = `${position}%`;
   }
 
@@ -303,26 +304,27 @@ document.addEventListener('DOMContentLoaded', function () {
   function updateLoudnessMeterRange() {
     const targetLufs = parseFloat(targetLoudnessSlider.value);
     const range = parseFloat(loudnessRangeSlider.value);
-    
+
     // 範囲の開始位置と幅を計算
     const startLufs = targetLufs - range / 2;
     const endLufs = targetLufs + range / 2;
-    
-    // スケールを表示範囲に変換
-    const startPosition = (1 - Math.abs(startLufs) / 40) * 100;
-    const endPosition = (1 - Math.abs(endLufs) / 40) * 100;
+
+    // スケールを表示範囲に変換 (0〜-60の範囲)
+    const startPosition = (1 - Math.abs(startLufs) / 60) * 100;
+    const endPosition = (1 - Math.abs(endLufs) / 60) * 100;
     const width = endPosition - startPosition;
-    
+
     // レンジ表示を更新
     loudnessRange.style.left = `${startPosition}%`;
     loudnessRange.style.width = `${width}%`;
   }
 
+
   // 現在のラウドネス値を取得して表示を更新
   function updateLoudnessMeter() {
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
       if (!tabs || tabs.length === 0) return;
-      
+
       try {
         chrome.tabs.sendMessage(tabs[0].id, {
           action: 'getLoudnessInfo'
@@ -331,24 +333,24 @@ document.addEventListener('DOMContentLoaded', function () {
             console.log('ラウドネス情報の取得に失敗:', chrome.runtime.lastError);
             return;
           }
-          
+
           if (response && response.success) {
             const lufs = response.currentLoudness;
-            
+
             // 有効な値が返された場合のみ表示を更新
             if (lufs > -70) {
               // メーターバーの更新（-40〜0 LUFSの範囲を0%〜100%に変換）
               const barWidth = Math.min(100, Math.max(0, (lufs + 40) * 2.5));
               loudnessBar.style.width = `${barWidth}%`;
-              
+
               // 数値表示の更新
               currentLoudnessValue.textContent = `${lufs.toFixed(1)} LUFS`;
-              
+
               // ターゲットとの差に応じた色の変更
               const targetLufs = parseFloat(targetLoudnessSlider.value);
               const difference = Math.abs(lufs - targetLufs);
               const range = parseFloat(loudnessRangeSlider.value) / 2;
-              
+
               if (difference <= range) {
                 // 許容範囲内は緑
                 loudnessBar.style.backgroundColor = '#4CAF50';
@@ -372,26 +374,58 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // ラウドネスモニタリングの開始/停止
-  function toggleLoudnessMonitoring(enabled) {
-    // 既存の更新間隔をクリア
-    if (loudnessUpdateInterval) {
-      clearInterval(loudnessUpdateInterval);
-      loudnessUpdateInterval = null;
-    }
-    
-    // 有効な場合は新しい更新間隔を設定
-    if (enabled) {
-      // 初回の更新
-      updateLoudnessMeter();
-      
-      // 定期的な更新（200ms間隔）
-      loudnessUpdateInterval = setInterval(updateLoudnessMeter, 200);
-    } else {
-      // 無効時はメーターをリセット
-      loudnessBar.style.width = '0%';
-      currentLoudnessValue.textContent = 'N/A';
-    }
+  // 現在のラウドネス値を取得して表示を更新
+  function updateLoudnessMeter() {
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+      if (!tabs || tabs.length === 0) return;
+
+      try {
+        chrome.tabs.sendMessage(tabs[0].id, {
+          action: 'getLoudnessInfo'
+        }, function (response) {
+          if (chrome.runtime.lastError) {
+            console.log('ラウドネス情報の取得に失敗:', chrome.runtime.lastError);
+            return;
+          }
+
+          if (response && response.success) {
+            const lufs = response.currentLoudness;
+
+            // 有効な値が返された場合のみ表示を更新
+            if (lufs > -70) {
+              // メーターバーの更新（-60〜0 LUFSの範囲を0%〜100%に変換）
+              const barWidth = Math.min(100, Math.max(0, (lufs + 60) * 100 / 60));
+              loudnessBar.style.width = `${barWidth}%`;
+
+              // 数値表示の更新
+              currentLoudnessValue.textContent = `${lufs.toFixed(1)} LUFS`;
+
+              // ターゲットとの差に応じた色の変更
+              const targetLufs = parseFloat(targetLoudnessSlider.value);
+              const difference = Math.abs(lufs - targetLufs);
+              const range = parseFloat(loudnessRangeSlider.value) / 2;
+
+              if (difference <= range) {
+                // 許容範囲内は緑
+                loudnessBar.style.backgroundColor = '#4CAF50';
+              } else if (difference <= range * 2) {
+                // やや範囲外は黄色
+                loudnessBar.style.backgroundColor = '#FFEB3B';
+              } else {
+                // 大きく範囲外は赤
+                loudnessBar.style.backgroundColor = '#F44336';
+              }
+            } else {
+              // 無音や極小音の場合
+              loudnessBar.style.width = '0%';
+              currentLoudnessValue.textContent = '無音';
+            }
+          }
+        });
+      } catch (error) {
+        console.error('ラウドネスメーター更新エラー:', error);
+      }
+    });
   }
 
   // 設定保存の処理
@@ -707,7 +741,7 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   // ポップアップが閉じられるときの処理
-  window.addEventListener('unload', function() {
+  window.addEventListener('unload', function () {
     // ラウドネスモニタリングを停止
     if (loudnessUpdateInterval) {
       clearInterval(loudnessUpdateInterval);
