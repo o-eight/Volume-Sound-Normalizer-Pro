@@ -37,9 +37,14 @@
     };
     let compressorSettings = { ...defaultSettings };
 
+    // 検出メソッドを追跡する変数を追加
+    let lastDetectionMethod = '';
+    // ナビゲーション変更用のタイムアウト変数を追加
+    let navigationChangeTimeout = null;
 
 
-    // YouTubeのURLからチャンネルIDを取得する関数
+
+    // YouTubeのチャンネルIDを取得する関数（改良版）
     function getYouTubeChannelId() {
       // 現在のURLを取得
       const url = window.location.href;
@@ -57,76 +62,200 @@
       console.log('YouTubeページでチャンネル情報を検索中...');
 
       try {
-        // チャンネルページの場合
+        // DOMキャッシュをリセットして新鮮な検出を確保
+        document.body.querySelector = HTMLBodyElement.prototype.querySelector;
+
+        // まずチャンネルページを直接処理
         if (url.includes('/channel/')) {
           const matches = url.match(/\/channel\/([^\/\?]+)/);
           if (matches && matches[1]) {
             channelId = matches[1];
             detectionMethod = 'channel_url';
             console.log('チャンネルページからIDを検出:', channelId);
-            return { id: channelId, name: '', method: detectionMethod };
+
+            // タイトルからチャンネル名を取得
+            const titleElem = document.querySelector('title');
+            if (titleElem) {
+              channelName = titleElem.textContent.replace(' - YouTube', '').trim();
+            }
+
+            return { id: channelId, name: channelName, method: detectionMethod };
           }
         }
 
-        // YouTubeの動画ページでの複数のセレクタを試行
-        const selectors = [
-          // 標準的なYouTubeセレクタ
-          { selector: '[itemprop="author"] [itemprop="url"]', method: 'itemprop_author_url' },
-          { selector: '#owner #channel-name a', method: 'owner_channel_name' },
-          // 新しいYouTubeデザイン用のセレクタ
-          { selector: 'ytd-video-owner-renderer a', method: 'video_owner_renderer' },
-          { selector: 'ytd-channel-name a', method: 'channel_name_link' },
-          // フォールバックセレクタ
-          { selector: 'a.yt-simple-endpoint.style-scope.yt-formatted-string', method: 'fallback_endpoint' }
-        ];
+        // ユーザーページ (/@username) の場合
+        if (url.includes('/@')) {
+          const matches = url.match(/\/@([^\/\?]+)/);
+          if (matches && matches[1]) {
+            channelId = '@' + matches[1];
+            detectionMethod = 'username_url';
+            console.log('URLからユーザー名を検出:', channelId);
 
-        // 各セレクタを試してチャンネル情報を取得
-        for (const selectorInfo of selectors) {
-          const channelElement = document.querySelector(selectorInfo.selector);
-          if (channelElement) {
-            console.log('セレクタでチャンネル要素を検出:', selectorInfo.selector);
-            detectionMethod = selectorInfo.method;
-
-            // チャンネルURLからIDを抽出
-            if (channelElement.href) {
-              const channelUrl = channelElement.href;
-              console.log('チャンネルURL:', channelUrl);
-
-              const urlMatches = channelUrl.match(/\/channel\/([^\/\?]+)/);
-              if (urlMatches && urlMatches[1]) {
-                channelId = urlMatches[1];
-                detectionMethod += '_channel_id';
-                console.log('URLからチャンネルIDを抽出:', channelId);
-                return { id: channelId, name: channelElement.textContent.trim(), method: detectionMethod };
-              }
-
-              // /@username 形式のURLの場合
-              const usernameMatches = channelUrl.match(/\/@([^\/\?]+)/);
-              if (usernameMatches && usernameMatches[1]) {
-                channelId = '@' + usernameMatches[1];
-                detectionMethod += '_username';
-                console.log('URLからユーザー名を抽出:', channelId);
-                return { id: channelId, name: channelElement.textContent.trim(), method: detectionMethod };
-              }
+            // タイトルからチャンネル名を取得
+            const titleElem = document.querySelector('title');
+            if (titleElem) {
+              channelName = titleElem.textContent.replace(' - YouTube', '').trim();
             }
 
-            // URLからIDを取得できなかった場合はテキスト内容を使用
-            if (!channelId && channelElement.textContent) {
-              channelName = channelElement.textContent.trim();
-              detectionMethod += '_text_only';
-              console.log('テキストからチャンネル名を抽出:', channelName);
-              return { id: channelName, name: channelName, method: detectionMethod }; // IDの代わりに名前を返す
+            return { id: channelId, name: channelName, method: detectionMethod };
+          }
+        }
+
+        // 動画ページの場合、複数の検出方法を検証付きで使用
+        if (url.includes('/watch')) {
+          // まずメタデータからチャンネルを取得（最も信頼性が高い）
+          const metaElements = document.querySelectorAll('meta[itemprop="channelId"]');
+          if (metaElements.length > 0) {
+            channelId = metaElements[0].content;
+            detectionMethod = 'meta_channelid';
+            console.log('メタデータからチャンネルIDを検出:', channelId);
+
+            // 他のメタデータからチャンネル名も取得
+            const nameElements = document.querySelectorAll('meta[itemprop="author"]');
+            if (nameElements.length > 0) {
+              channelName = nameElements[0].content;
+            } else {
+              channelName = getChannelName();
+            }
+
+            return { id: channelId, name: channelName, method: detectionMethod };
+          }
+
+          // 検証付きで様々なDOMセレクタを試行
+          const selectors = [
+            // 標準的なYouTubeセレクタ
+            { selector: '[itemprop="author"] [itemprop="url"]', method: 'itemprop_author_url' },
+            { selector: '#owner #channel-name a', method: 'owner_channel_name' },
+            // 新しいYouTubeデザイン用のセレクタ
+            { selector: 'ytd-video-owner-renderer a', method: 'video_owner_renderer' },
+            { selector: 'ytd-channel-name a', method: 'channel_name_link' },
+            // フォールバックセレクタ
+            { selector: 'a.yt-simple-endpoint.style-scope.yt-formatted-string', method: 'fallback_endpoint' }
+          ];
+
+          // 各セレクタを試し、結果を検証
+          for (const selectorInfo of selectors) {
+            const channelElements = document.querySelectorAll(selectorInfo.selector);
+
+            // 重要: 複数の要素が見つかった場合、最も関連性の高いものを使用
+            if (channelElements && channelElements.length > 0) {
+              let channelElement = null;
+
+              // 複数の要素がある場合、動画所有者である可能性が最も高いものを探す
+              if (channelElements.length > 1) {
+                // 表示されていて有効なリンクを含む要素を探す
+                for (let i = 0; i < channelElements.length; i++) {
+                  const elem = channelElements[i];
+                  if (elem.href &&
+                    (elem.href.includes('/channel/') || elem.href.includes('/@')) &&
+                    isElementVisible(elem)) {
+                    channelElement = elem;
+                    break;
+                  }
+                }
+
+                // 良い候補が見つからなかった場合、最初のものを使用
+                if (!channelElement) {
+                  channelElement = channelElements[0];
+                }
+              } else {
+                channelElement = channelElements[0];
+              }
+
+              console.log('セレクタでチャンネル要素を検出:', selectorInfo.selector);
+              detectionMethod = selectorInfo.method;
+
+              // hrefが利用可能な場合、そこからチャンネルIDを抽出
+              if (channelElement.href) {
+                const channelUrl = channelElement.href;
+                console.log('チャンネルURL:', channelUrl);
+
+                const urlMatches = channelUrl.match(/\/channel\/([^\/\?]+)/);
+                if (urlMatches && urlMatches[1]) {
+                  channelId = urlMatches[1];
+                  detectionMethod += '_channel_id';
+                  console.log('URLからチャンネルIDを抽出:', channelId);
+                  return { id: channelId, name: channelElement.textContent.trim(), method: detectionMethod };
+                }
+
+                // /@username 形式を処理
+                const usernameMatches = channelUrl.match(/\/@([^\/\?]+)/);
+                if (usernameMatches && usernameMatches[1]) {
+                  channelId = '@' + usernameMatches[1];
+                  detectionMethod += '_username';
+                  console.log('URLからユーザー名を抽出:', channelId);
+                  return { id: channelId, name: channelElement.textContent.trim(), method: detectionMethod };
+                }
+              }
+
+              // URL抽出が失敗した場合、フォールバックとしてテキスト内容を使用
+              if (!channelId && channelElement.textContent) {
+                channelName = channelElement.textContent.trim();
+                channelId = channelName; // IDのフォールバックとして名前を使用
+                detectionMethod += '_text_only';
+                console.log('テキストからチャンネル名を抽出:', channelName);
+                return { id: channelId, name: channelName, method: detectionMethod };
+              }
             }
           }
         }
 
-        // メタデータから取得を試行
-        const metaElements = document.querySelectorAll('meta[itemprop="channelId"]');
-        if (metaElements.length > 0) {
-          channelId = metaElements[0].content;
-          detectionMethod = 'meta_channelid';
-          console.log('メタデータからチャンネルIDを検出:', channelId);
-          return { id: channelId, name: getChannelName(), method: detectionMethod };
+        // ここまで来た場合、チャンネル情報を見つけるためにより積極的な方法を使用
+        console.log('標準的な検出方法が失敗しました、代替方法を試行中...');
+
+        // 動画説明文でチャンネル情報を確認
+        const descriptionElement = document.querySelector('#description');
+        if (descriptionElement) {
+          const links = descriptionElement.querySelectorAll('a[href*="/channel/"], a[href*="/@"]');
+          if (links && links.length > 0) {
+            const channelLink = links[0].href;
+
+            if (channelLink.includes('/channel/')) {
+              const matches = channelLink.match(/\/channel\/([^\/\?]+)/);
+              if (matches && matches[1]) {
+                channelId = matches[1];
+                channelName = links[0].textContent.trim();
+                detectionMethod = 'description_channel_link';
+                console.log('説明文でチャンネルIDを発見:', channelId);
+                return { id: channelId, name: channelName, method: detectionMethod };
+              }
+            }
+
+            if (channelLink.includes('/@')) {
+              const matches = channelLink.match(/\/@([^\/\?]+)/);
+              if (matches && matches[1]) {
+                channelId = '@' + matches[1];
+                channelName = links[0].textContent.trim();
+                detectionMethod = 'description_username_link';
+                console.log('説明文でユーザー名を発見:', channelId);
+                return { id: channelId, name: channelName, method: detectionMethod };
+              }
+            }
+          }
+        }
+
+        // 最終フォールバック: ページのJSONデータから抽出
+        const scriptElements = document.querySelectorAll('script');
+        for (const script of scriptElements) {
+          const text = script.textContent;
+          if (text && text.includes('"channelId":"')) {
+            const matches = text.match(/"channelId":"([^"]+)"/);
+            if (matches && matches[1]) {
+              channelId = matches[1];
+              detectionMethod = 'script_json_data';
+              console.log('スクリプトデータでチャンネルIDを発見:', channelId);
+
+              // チャンネル名も抽出
+              const nameMatches = text.match(/"ownerChannelName":"([^"]+)"/);
+              if (nameMatches && nameMatches[1]) {
+                channelName = nameMatches[1];
+              } else {
+                channelName = getChannelName();
+              }
+
+              return { id: channelId, name: channelName, method: detectionMethod };
+            }
+          }
         }
       } catch (error) {
         console.error('チャンネルID取得中のエラー:', error);
@@ -136,6 +265,104 @@
       console.log('チャンネルIDの取得に失敗しました');
       return { id: channelName || channelId || 'unknown', name: channelName, method: detectionMethod || 'unknown' };
     }
+
+    // 要素が表示されているかどうかを確認するヘルパー関数
+    function isElementVisible(element) {
+      if (!element) return false;
+
+      const style = window.getComputedStyle(element);
+      return style.display !== 'none' &&
+        style.visibility !== 'hidden' &&
+        style.opacity !== '0' &&
+        element.offsetWidth > 0 &&
+        element.offsetHeight > 0;
+    }
+
+    // より長いタイムアウトを持つ改良されたURL変更検出
+    function checkForNavigationChanges() {
+      const currentUrl = window.location.href;
+
+      if (lastUrl !== currentUrl) {
+        console.log('URLが変更されました:', lastUrl, '->', currentUrl);
+        lastUrl = currentUrl;
+
+        // 以前のタイムアウトがある場合はクリア
+        if (navigationChangeTimeout) {
+          clearTimeout(navigationChangeTimeout);
+        }
+
+        // DOMが完全に更新されるのを待つために長めのタイムアウトを設定
+        navigationChangeTimeout = setTimeout(() => {
+          // 遅延後にチャンネル情報を取得
+          const channelInfo = getYouTubeChannelId();
+          const newChannelId = channelInfo.id;
+          const channelName = channelInfo.name || getChannelName();
+
+          console.log('URLの変更を検出。新しいチャンネル:', newChannelId, channelName, '方法:', channelInfo.method);
+
+          // チャンネルIDが変更された場合、またはより良い検出方法がある場合のみ更新
+          const shouldUpdate = newChannelId !== lastChannelId ||
+            (newChannelId === lastChannelId &&
+              isImprovedDetectionMethod(channelInfo.method, lastDetectionMethod));
+
+          if (shouldUpdate) {
+            lastChannelId = newChannelId;
+            lastDetectionMethod = channelInfo.method;
+
+            // チャンネル変更をbackground.jsに通知
+            chrome.runtime.sendMessage({
+              action: 'channelChanged',
+              channelId: newChannelId,
+              channelName: channelName,
+              detectionMethod: channelInfo.method
+            });
+
+            // 新しいチャンネルの設定を読み込み
+            loadChannelSettings();
+          }
+        }, 2000); // タイムアウトを2秒に増加
+      }
+    }
+
+    // 新しい検出方法が以前のものより信頼性が高いかどうかを判断する関数
+    function isImprovedDetectionMethod(newMethod, oldMethod) {
+      // 検出方法の信頼性ランキングを定義（インデックスが高いほど信頼性が高い）
+      const methodReliability = [
+        'unknown',
+        'error',
+        'fallback_endpoint_text_only',
+        'channel_name_link_text_only',
+        'video_owner_renderer_text_only',
+        'owner_channel_name_text_only',
+        'itemprop_author_url_text_only',
+        'fallback_endpoint_username',
+        'channel_name_link_username',
+        'video_owner_renderer_username',
+        'owner_channel_name_username',
+        'itemprop_author_url_username',
+        'fallback_endpoint_channel_id',
+        'channel_name_link_channel_id',
+        'video_owner_renderer_channel_id',
+        'owner_channel_name_channel_id',
+        'itemprop_author_url_channel_id',
+        'description_username_link',
+        'description_channel_link',
+        'username_url',
+        'script_json_data',
+        'meta_channelid',
+        'channel_url'
+      ];
+
+      const newMethodRank = methodReliability.indexOf(newMethod);
+      const oldMethodRank = methodReliability.indexOf(oldMethod);
+
+      // メソッドがリストに見つからない場合、最低の信頼性を割り当て
+      const newRank = newMethodRank === -1 ? 0 : newMethodRank;
+      const oldRank = oldMethodRank === -1 ? 0 : oldMethodRank;
+
+      return newRank > oldRank;
+    }
+
 
     // チャンネル固有の設定キーを作成
     function getChannelSettingsKey(channelId) {
@@ -197,74 +424,132 @@
 
 
 
-    // メッセージリスナーを設定
+    // メッセージリスナーを改善
     chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
+      console.log('コンテンツスクリプトがメッセージを受信:', request.action);
+
+      // pingメッセージには即座に応答
+      if (request.action === 'ping') {
+        console.log('ping要求を受信 - pongで応答');
+        sendResponse({ status: 'pong' });
+        return true;
+      }
+
       if (request.action === 'updateCompressorSettings') {
-        // 省略...既存のコード
-      } else if (request.action === 'getChannelInfo') {
-        // 現在のチャンネル情報を返す
-        const channelInfo = getYouTubeChannelId();
-        sendResponse({
-          channelId: channelInfo.id,
-          channelName: channelInfo.name || getChannelName(),
-          detectionMethod: channelInfo.method
-        });
-      } else if (request.action === 'forceChannelInfoRefresh') {
+        try {
+          console.log('コンプレッサー設定更新を受信:', request.settings);
+
+          // 設定を更新
+          compressorSettings = request.settings;
+
+          // コンプレッサーの設定を適用
+          updateCompressorSettings();
+          toggleCompressor(compressorSettings.enabled);
+
+          // チャンネル固有の設定を保存
+          if (request.saveForChannel && currentChannelId) {
+            const settingsKey = getChannelSettingsKey(currentChannelId);
+            chrome.storage.sync.set({
+              [settingsKey]: compressorSettings
+            }, function () {
+              if (chrome.runtime.lastError) {
+                console.error('チャンネル設定の保存エラー:', chrome.runtime.lastError);
+                sendResponse({ success: false, error: chrome.runtime.lastError.message });
+              } else {
+                console.log('チャンネル設定を保存しました:', settingsKey);
+                sendResponse({ success: true });
+              }
+            });
+            return true; // 非同期レスポンスのために必要
+          }
+
+          // デフォルト設定を保存
+          if (request.saveAsDefault) {
+            chrome.storage.sync.set({
+              'default': compressorSettings
+            }, function () {
+              if (chrome.runtime.lastError) {
+                console.error('デフォルト設定の保存エラー:', chrome.runtime.lastError);
+                sendResponse({ success: false, error: chrome.runtime.lastError.message });
+              } else {
+                console.log('デフォルト設定を保存しました');
+                sendResponse({ success: true });
+              }
+            });
+            return true; // 非同期レスポンスのために必要
+          }
+
+          // 設定の更新のみの場合（保存なし）
+          sendResponse({ success: true });
+        } catch (error) {
+          console.error('設定更新処理中のエラー:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+        return true;
+      }
+      else if (request.action === 'getChannelInfo') {
+        try {
+          // 現在のチャンネル情報を返す
+          const channelInfo = getYouTubeChannelId();
+          console.log('チャンネル情報を返します:', channelInfo);
+          sendResponse({
+            channelId: channelInfo.id,
+            channelName: channelInfo.name || getChannelName(),
+            detectionMethod: channelInfo.method
+          });
+        } catch (error) {
+          console.error('チャンネル情報取得中のエラー:', error);
+          sendResponse({
+            error: true,
+            message: error.message
+          });
+        }
+        return true;
+      }
+      else if (request.action === 'forceChannelInfoRefresh') {
         // チャンネル情報を強制的に再取得
         console.log('チャンネル情報の強制更新リクエストを受信');
 
-        // 処理中フラグを立てる 
-        let responseData = null;
-        let responseTimer = null;
-
-        // DOMをより詳細に確認
-        function tryGetChannelInfo() {
+        try {
           // チャンネル情報を再取得
           const channelInfo = getYouTubeChannelId();
           const channelId = channelInfo.id;
           const channelName = channelInfo.name || getChannelName();
 
-          console.log('取得試行:', channelId, channelName, '方法:', channelInfo.method);
+          console.log('強制更新で取得したチャンネル情報:', channelId, channelName, '方法:', channelInfo.method);
 
-          if (channelId) {
-            // 情報を取得できた場合
-            console.log('強制更新で取得したチャンネル情報:', channelId, channelName, '方法:', channelInfo.method);
+          // 最新のチャンネル情報でグローバル変数を更新
+          currentChannelId = channelId;
 
-            // 最新のチャンネル情報でグローバル変数を更新
-            currentChannelId = channelId;
+          // background.jsにも通知
+          chrome.runtime.sendMessage({
+            action: 'channelChanged',
+            channelId: channelId,
+            channelName: channelName,
+            detectionMethod: channelInfo.method
+          }).catch(err => {
+            console.log('バックグラウンドへの通知エラー (無視可):', err);
+          });
 
-            // background.jsにも通知
-            chrome.runtime.sendMessage({
-              action: 'channelChanged',
-              channelId: channelId,
-              channelName: channelName,
-              detectionMethod: channelInfo.method
-            });
-
-            // レスポンスデータを設定
-            responseData = {
-              channelId: channelId,
-              channelName: channelName,
-              detectionMethod: channelInfo.method
-            };
-
-            // レスポンスを送信し、タイマーをクリア
-            clearTimeout(responseTimer);
-            sendResponse(responseData);
-            return true;
-          }
-
-          return false;
-        }
-
-        // 即時に一度試行
-        if (!tryGetChannelInfo()) {
-          // 略... 既存のコード
+          // レスポンスを送信
+          sendResponse({
+            channelId: channelId,
+            channelName: channelName,
+            detectionMethod: channelInfo.method
+          });
+        } catch (error) {
+          console.error('チャンネル情報の強制更新中にエラー:', error);
+          sendResponse({
+            error: true,
+            message: error.message
+          });
         }
 
         // 非同期レスポンスのためにtrueを返す
         return true;
       }
+
+      // 他のメッセージタイプのために必要
       return true;
     });
 
@@ -393,41 +678,7 @@
     let lastUrl = window.location.href;
     let lastChannelId = '';
 
-    // YouTube SPA内の遷移を監視する関数
-    function checkForNavigationChanges() {
-      const currentUrl = window.location.href;
 
-      if (lastUrl !== currentUrl) {
-        console.log('URLが変更されました:', lastUrl, '->', currentUrl);
-        lastUrl = currentUrl;
-
-        // YouTubeのSPA遷移後、DOMが構築されるまで少し待機
-        setTimeout(() => {
-          // チャンネル情報を再読み込み
-          const channelInfo = getYouTubeChannelId();
-          const newChannelId = channelInfo.id;
-          const channelName = channelInfo.name || getChannelName();
-
-          console.log('URLの変更を検出。新しいチャンネル:', newChannelId, channelName, '方法:', channelInfo.method);
-
-          // チャンネルIDが変更された場合
-          if (newChannelId !== lastChannelId) {
-            lastChannelId = newChannelId;
-
-            // 新しいチャンネル情報をbackground.jsに通知
-            chrome.runtime.sendMessage({
-              action: 'channelChanged',
-              channelId: newChannelId,
-              channelName: channelName,
-              detectionMethod: channelInfo.method
-            });
-
-            // 新しいチャンネルの設定を読み込み
-            loadChannelSettings();
-          }
-        }, 1000);
-      }
-    }
 
     // 定期的にURLの変更をチェック（YouTube SPAの遷移に対応）
     setInterval(checkForNavigationChanges, 1000);
