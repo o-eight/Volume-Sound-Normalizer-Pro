@@ -97,59 +97,102 @@
     .refresh-button:hover {
       background-color: #0b7dda;
     }
+    /* 折りたたみパネル用のスタイル */
+    .collapsible {
+      background-color: #f1f1f1;
+      color: #444;
+      cursor: pointer;
+      padding: 10px;
+      width: 100%;
+      border: none;
+      text-align: left;
+      outline: none;
+      font-size: 14px;
+      margin-bottom: 10px;
+      border-radius: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .collapsible:after {
+      content: '+';
+      font-size: 16px;
+      font-weight: bold;
+    }
+    .active:after {
+      content: '−';
+    }
+    .advanced-settings {
+      padding: 0 10px;
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.2s ease-out;
+      background-color: #f9f9f9;
+      border-radius: 0 0 4px 4px;
+    }
+    .main-controls {
+      background-color: #f9f9f9;
+      padding: 10px;
+      border-radius: 4px;
+      margin-bottom: 15px;
+    }
   </style>
 </head>
 <body>
   <h2>オーディオコンプレッサー</h2>
   
-  <div class="toggle-container">
-    <label class="switch">
-      <input type="checkbox" id="compressor-enabled">
-      <span class="slider"></span>
-    </label>
-    <span>コンプレッサーを有効化</span>
+  <div class="main-controls">
+    <div class="toggle-container">
+      <label class="switch">
+        <input type="checkbox" id="compressor-enabled">
+        <span class="slider"></span>
+      </label>
+      <span>コンプレッサーを有効化</span>
+    </div>
+
+    <div class="slider-container">
+      <label for="makeup-gain">音量調整 (dB):</label>
+      <input type="range" id="makeup-gain" min="-12" max="30" value="0" step="0.5">
+      <span class="value-display" id="makeup-gain-value">0</span>
+    </div>
   </div>
 
-  <div class="slider-container">
-    <label for="threshold">閾値 (dB):</label>
-    <input type="range" id="threshold" min="-60" max="0" value="-24" step="1">
-    <span class="value-display" id="threshold-value">-24</span>
-  </div>
+  <button class="collapsible">アドバンス設定</button>
+  <div class="advanced-settings">
+    <div class="slider-container">
+      <label for="threshold">閾値 (dB):</label>
+      <input type="range" id="threshold" min="-60" max="0" value="-24" step="1">
+      <span class="value-display" id="threshold-value">-24</span>
+    </div>
 
-  <div class="slider-container">
-    <label for="ratio">比率:</label>
-    <input type="range" id="ratio" min="1" max="20" value="4" step="0.5">
-    <span class="value-display" id="ratio-value">4</span>
-  </div>
+    <div class="slider-container">
+      <label for="ratio">比率:</label>
+      <input type="range" id="ratio" min="1" max="20" value="4" step="0.5">
+      <span class="value-display" id="ratio-value">4</span>
+    </div>
 
-  <div class="slider-container">
-    <label for="attack">アタック (ms):</label>
-    <input type="range" id="attack" min="0" max="1000" value="50" step="1">
-    <span class="value-display" id="attack-value">50</span>
-  </div>
+    <div class="slider-container">
+      <label for="attack">アタック (ms):</label>
+      <input type="range" id="attack" min="0" max="1000" value="50" step="1">
+      <span class="value-display" id="attack-value">50</span>
+    </div>
 
-  <div class="slider-container">
-    <label for="release">リリース (ms):</label>
-    <input type="range" id="release" min="0" max="1000" value="250" step="1">
-    <span class="value-display" id="release-value">250</span>
-  </div>
+    <div class="slider-container">
+      <label for="release">リリース (ms):</label>
+      <input type="range" id="release" min="0" max="1000" value="250" step="1">
+      <span class="value-display" id="release-value">250</span>
+    </div>
 
-  <div class="slider-container">
-    <label for="knee">ニー幅 (dB):</label>
-    <input type="range" id="knee" min="0" max="40" value="5" step="1">
-    <span class="value-display" id="knee-value">5</span>
-  </div>
-
-  <div class="slider-container">
-    <label for="makeup-gain">メイクアップゲイン (dB):</label>
-    <input type="range" id="makeup-gain" min="0" max="30" value="0" step="0.5">
-    <span class="value-display" id="makeup-gain-value">0</span>
+    <div class="slider-container">
+      <label for="knee">ニー幅 (dB):</label>
+      <input type="range" id="knee" min="0" max="40" value="5" step="1">
+      <span class="value-display" id="knee-value">5</span>
+    </div>
   </div>
 
   <div id="channel-info" style="margin-top: 15px; display: none;">
     <div class="channel-header">
       <strong>現在のチャンネル:</strong>
-      <button id="refresh-channel" class="refresh-button" title="チャンネル情報を更新">🔄</button>
     </div>
     <p><span id="channel-name">なし</span></p>
     <div style="display: flex; justify-content: space-between;">

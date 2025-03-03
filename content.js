@@ -354,8 +354,8 @@
         compressorNode.release.value = compressorSettings.release / 1000; // msから秒に変換
         compressorNode.knee.value = compressorSettings.knee;
         
-        // メイクアップゲインの設定
-        gainNode.gain.value = Math.pow(10, compressorSettings.makeupGain / 20); // dBをリニアゲインに変換
+        // メイクアップゲインの設定 (dBをリニアゲインに変換)
+        gainNode.gain.value = Math.pow(10, compressorSettings.makeupGain / 20);
 
         // ノードを接続
         if (compressorSettings.enabled) {
@@ -392,7 +392,7 @@
           nodes.compressor.release.value = compressorSettings.release / 1000;
           nodes.compressor.knee.value = compressorSettings.knee;
           
-          // メイクアップゲインの更新
+          // メイクアップゲインの更新 (dBをリニアゲインに変換)
           nodes.gain.gain.value = Math.pow(10, compressorSettings.makeupGain / 20);
         }
       });

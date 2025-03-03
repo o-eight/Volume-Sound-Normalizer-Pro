@@ -17,64 +17,27 @@ document.addEventListener('DOMContentLoaded', function() {
   const saveButton = document.getElementById('save-settings');
   const saveChannelButton = document.getElementById('save-channel');
   const saveGeneralButton = document.getElementById('save-settings-general');
-  const refreshChannelButton = document.getElementById('refresh-channel');
   const channelInfoDiv = document.getElementById('channel-info');
   const nonYoutubeInfoDiv = document.getElementById('non-youtube-info');
   const channelNameSpan = document.getElementById('channel-name');
   
+  // 折りたたみパネルの設定
+  const collapsible = document.querySelector('.collapsible');
+  const advancedSettings = document.querySelector('.advanced-settings');
+  
+  // 折りたたみパネルのクリックイベント
+  collapsible.addEventListener('click', function() {
+    this.classList.toggle('active');
+    
+    if (advancedSettings.style.maxHeight) {
+      advancedSettings.style.maxHeight = null;
+    } else {
+      advancedSettings.style.maxHeight = advancedSettings.scrollHeight + 'px';
+    }
+  });
+  
   let currentChannelId = '';
   let isYouTube = false;
-
-  // チャンネル情報更新ボタンのイベントハンドラー
-  refreshChannelButton.addEventListener('click', function() {
-    console.log('チャンネル情報の手動更新をリクエスト');
-    
-    // 更新中表示
-    channelNameSpan.textContent = '更新中...';
-    
-    // タブから強制的にチャンネル情報を再取得
-    forceChannelInfoRefresh();
-  });
-
-  // タブからチャンネル情報を強制的に取得
-  function forceChannelInfoRefresh() {
-    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-      if (!tabs || tabs.length === 0) {
-        showError('アクティブなタブが見つかりません');
-        return;
-      }
-      
-      const currentTab = tabs[0];
-      
-      // YouTubeのページかどうかを確認
-      isYouTube = currentTab.url && currentTab.url.includes('youtube.com');
-      
-      if (!isYouTube) {
-        showError('YouTubeページではありません');
-        return;
-      }
-      
-      // タブをリロードして最新のコンテンツを取得
-      chrome.tabs.sendMessage(currentTab.id, {
-        action: 'forceChannelInfoRefresh'
-      }, function(response) {
-        if (chrome.runtime.lastError) {
-          console.error('メッセージ送信エラー:', chrome.runtime.lastError);
-          
-          // 通信エラーの場合、コンテンツスクリプトが読み込まれていない可能性がある
-          showError('接続エラー。ページを更新してください');
-          return;
-        }
-        
-        if (response && response.channelId) {
-          console.log('強制更新で取得:', response);
-          updateChannelUI(response.channelId, response.channelName);
-        } else {
-          showError('チャンネル情報を取得できませんでした');
-        }
-      });
-    });
-  }
 
   // エラーメッセージを表示
   function showError(message) {
@@ -152,7 +115,7 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
               // チャンネル情報がない場合
               console.log('チャンネル情報が利用できません');
-              channelNameSpan.textContent = '不明なチャンネル（更新ボタンを押してください）';
+              channelNameSpan.textContent = '不明なチャンネル';
               loadDefaultSettings();
             }
           });
