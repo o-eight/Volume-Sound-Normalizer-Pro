@@ -377,26 +377,26 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
-// ラウドネスモニタリングの開始/停止関数を追加
-function toggleLoudnessMonitoring(enabled) {
-  // 既存のインターバルがあれば停止
-  if (loudnessUpdateInterval) {
-    clearInterval(loudnessUpdateInterval);
-    loudnessUpdateInterval = null;
-  }
+  // ラウドネスモニタリングの開始/停止関数を追加
+  function toggleLoudnessMonitoring(enabled) {
+    // 既存のインターバルがあれば停止
+    if (loudnessUpdateInterval) {
+      clearInterval(loudnessUpdateInterval);
+      loudnessUpdateInterval = null;
+    }
 
-  // 有効な場合は監視を開始
-  if (enabled) {
-    // 初回更新
-    updateLoudnessMeter();
-    // 定期的に更新（200ミリ秒ごと）
-    loudnessUpdateInterval = setInterval(updateLoudnessMeter, 200);
-  } else {
-    // 無効の場合はメーターをリセット
-    loudnessBar.style.width = '0%';
-    currentLoudnessValue.textContent = '無効';
+    // 有効な場合は監視を開始
+    if (enabled) {
+      // 初回更新
+      updateLoudnessMeter();
+      // 定期的に更新（200ミリ秒ごと）
+      loudnessUpdateInterval = setInterval(updateLoudnessMeter, 200);
+    } else {
+      // 無効の場合はメーターをリセット
+      loudnessBar.style.width = '0%';
+      currentLoudnessValue.textContent = '無効';
+    }
   }
-}
 
   // 設定保存の処理
   function saveSettings(saveForChannel, saveAsDefault) {
@@ -498,7 +498,10 @@ function toggleLoudnessMonitoring(enabled) {
     // 既存の通知を削除
     const existingStatus = document.getElementById('status-notification');
     if (existingStatus) {
-      document.body.removeChild(existingStatus);
+      // 親要素が存在することを確認
+      if (existingStatus.parentNode) {
+        existingStatus.parentNode.removeChild(existingStatus);
+      }
     }
 
     // 新しい通知を作成
@@ -528,11 +531,11 @@ function toggleLoudnessMonitoring(enabled) {
       // スピナーアニメーションのためのスタイルを追加
       const style = document.createElement('style');
       style.textContent = `
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      `;
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    `;
       document.head.appendChild(style);
     }
 
@@ -541,8 +544,9 @@ function toggleLoudnessMonitoring(enabled) {
     // エラーでなく、ローディング中でもない場合は、通知を2秒後に消す
     if (!isError && !isLoading) {
       setTimeout(function () {
-        if (document.getElementById('status-notification')) {
-          document.body.removeChild(status);
+        const notification = document.getElementById('status-notification');
+        if (notification && notification.parentNode) {
+          notification.parentNode.removeChild(notification);
         }
       }, 2000);
     }
@@ -552,8 +556,8 @@ function toggleLoudnessMonitoring(enabled) {
   function addRefreshPageButton() {
     // 既存のボタンがあれば削除
     const existingButton = document.getElementById('refresh-page-button-container');
-    if (existingButton) {
-      document.body.removeChild(existingButton);
+    if (existingButton && existingButton.parentNode) {
+      existingButton.parentNode.removeChild(existingButton);
     }
 
     const container = document.createElement('div');
@@ -582,7 +586,6 @@ function toggleLoudnessMonitoring(enabled) {
     container.appendChild(refreshButton);
     document.body.appendChild(container);
   }
-
   // 初期化時にコンテンツスクリプトへの接続を確認
   function checkContentScriptConnection() {
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
