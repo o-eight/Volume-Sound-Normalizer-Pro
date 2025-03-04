@@ -51,7 +51,7 @@
       makeupGain: 0,
       // ラウドネスノーマライズの設定を追加
       loudnessNormEnabled: false,
-      targetLoudness: -20, // LUFS
+      targetLoudness: -24, // LUFS
       loudnessRange: 7     // 許容範囲 (dB)
     };
     let compressorSettings = { ...defaultSettings };

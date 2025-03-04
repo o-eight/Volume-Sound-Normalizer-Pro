@@ -23,7 +23,7 @@ class LoudnessProcessor extends AudioWorkletProcessor {
     };
     
     // デフォルト設定
-    this.targetLoudness = -20;  // デフォルトのターゲットLUFS
+    this.targetLoudness = -24;  // デフォルトのターゲットLUFS
     this.loudnessRange = 7;     // デフォルトの許容範囲
     
     // 状態フラグ

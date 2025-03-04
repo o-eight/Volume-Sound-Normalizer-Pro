@@ -204,7 +204,7 @@ document.addEventListener('DOMContentLoaded', function () {
         makeupGain: 0,
         // ラウドネスノーマライズのデフォルト設定を追加
         loudnessNormEnabled: false,
-        targetLoudness: -20,
+        targetLoudness: -24,
         loudnessRange: 7
       },
       [settingsKey]: null
@@ -230,7 +230,7 @@ document.addEventListener('DOMContentLoaded', function () {
         makeupGain: 0,
         // ラウドネスノーマライズのデフォルト設定を追加
         loudnessNormEnabled: false,
-        targetLoudness: -20,
+        targetLoudness: -24,
         loudnessRange: 7
       }
     }, function (items) {
