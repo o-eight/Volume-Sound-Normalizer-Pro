@@ -37,8 +37,10 @@ document.addEventListener('DOMContentLoaded', function () {
   // 折りたたみパネルの設定
   const advancedCollapsible = document.getElementById('advanced-collapsible');
   const advancedSettings = document.querySelector('.advanced-settings');
-  const loudnessCollapsible = document.getElementById('loudness-collapsible');
-  const loudnessSettings = document.querySelector('.loudness-settings');
+
+  // 上級者向け機能トグルボタン
+  const advancedFeaturesToggle = document.getElementById('advanced-features-toggle');
+  const advancedFeaturesContainer = document.getElementById('advanced-features-container');
 
   // 折りたたみパネルのクリックイベント
   advancedCollapsible.addEventListener('click', function () {
@@ -51,16 +53,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
-  // ラウドネス設定の折りたたみパネルのクリックイベント
-  loudnessCollapsible.addEventListener('click', function () {
-    this.classList.toggle('active');
 
-    if (loudnessSettings.style.maxHeight) {
-      loudnessSettings.style.maxHeight = null;
-    } else {
-      loudnessSettings.style.maxHeight = loudnessSettings.scrollHeight + 'px';
-    }
-  });
 
   let currentChannelId = '';
   let isYouTube = false;
@@ -658,6 +651,12 @@ document.addEventListener('DOMContentLoaded', function () {
   loudnessNormEnabled.addEventListener('change', function () {
     toggleLoudnessMonitoring(this.checked);
     updateSettingsRealtime();
+
+    // 有効化されたがUIが表示されていない場合、ユーザーに通知
+    if (this.checked && !advancedFeaturesContainer.classList.contains('visible')) {
+      showNotification('ラウドネスノーマライズが有効化されました。上級者向け機能が非表示のため、メーターは表示されません。', false, false, 3000);
+    }
+
   });
 
   // リアルタイム更新用の関数を追加
@@ -720,6 +719,140 @@ document.addEventListener('DOMContentLoaded', function () {
       clearInterval(loudnessUpdateInterval);
     }
   });
+
+
+  // ローカルストレージから上級者モードの状態を取得
+  chrome.storage.local.get({
+    'advanced_mode_enabled': false
+  }, function (items) {
+    if (items.advanced_mode_enabled) {
+      showAdvancedFeatures();
+    }
+  });
+
+  // トグルボタンのイベントリスナー
+  advancedFeaturesToggle.addEventListener('click', function () {
+    if (advancedFeaturesContainer.classList.contains('visible')) {
+      hideAdvancedFeatures();
+
+      // 設定を保存
+      chrome.storage.local.set({
+        'advanced_mode_enabled': false
+      });
+    } else {
+      showAdvancedFeatures();
+
+      // 設定を保存
+      chrome.storage.local.set({
+        'advanced_mode_enabled': true
+      });
+    }
+  });
+
+  // 上級者向け機能を表示
+  function showAdvancedFeatures() {
+    advancedFeaturesContainer.style.display = 'block';
+    setTimeout(() => {
+      advancedFeaturesContainer.classList.add('visible');
+    }, 10);
+    advancedFeaturesToggle.classList.add('active');
+    advancedFeaturesToggle.textContent = '上級者向け機能を隠す';
+
+        
+    // ラウドネスメーターとスライダーの状態を更新
+    updateLoudnessMeterTarget();
+    updateLoudnessMeterRange();
+
+    // ラウドネスメーターの更新を開始（表示されている場合のみ）
+    if (compressorSettings.loudnessNormEnabled) {
+      toggleLoudnessMonitoring(true);
+    }
+  }
+
+  // 上級者向け機能を非表示
+  function hideAdvancedFeatures() {
+    advancedFeaturesContainer.classList.remove('visible');
+    setTimeout(() => {
+      advancedFeaturesContainer.style.display = 'none';
+    }, 300); // トランジション時間に合わせる
+    advancedFeaturesToggle.classList.remove('active');
+    advancedFeaturesToggle.textContent = '上級者向け機能を表示';
+
+        // ラウドネスモニタリングを停止（非表示時は不要）
+        if (compressorSettings.loudnessNormEnabled) {
+          toggleLoudnessMonitoring(false);
+        }
+  }
+
+  // 上級者向け機能の状態に応じてラウドネスモニタリングの開始/停止を調整
+  const originalToggleLoudnessMonitoring = toggleLoudnessMonitoring;
+  toggleLoudnessMonitoring = function(enabled) {
+    // 上級者機能が表示されていない場合は監視を実行しない
+    if (enabled && !advancedFeaturesContainer.classList.contains('visible')) {
+      // 実際のメーター更新は行わないが、設定値は保持する
+      if (loudnessUpdateInterval) {
+        clearInterval(loudnessUpdateInterval);
+        loudnessUpdateInterval = null;
+      }
+      return;
+    }
+    
+    // 元の関数を呼び出す
+    originalToggleLoudnessMonitoring(enabled);
+  };
+
+
+
+  
+
+  // 通知を表示する汎用関数（既存の関数を拡張）
+  function showNotification(message, isError = false, isLoading = false, duration = 2000) {
+    // 既存の通知を削除
+    const existingStatus = document.getElementById('status-notification');
+    if (existingStatus) {
+      if (existingStatus.parentNode) {
+        existingStatus.parentNode.removeChild(existingStatus);
+      }
+    }
+
+    // 新しい通知を作成
+    const status = document.createElement('div');
+    status.id = 'status-notification';
+    status.textContent = message;
+    status.style.color = isError ? 'red' : (isLoading ? 'blue' : 'green');
+    status.style.marginTop = '10px';
+    status.style.padding = '8px';
+    status.style.borderRadius = '4px';
+    status.style.textAlign = 'center';
+    status.style.backgroundColor = isError ? '#ffeeee' : (isLoading ? '#e6f7ff' : '#eeffee');
+    status.style.border = `1px solid ${isError ? '#ffcccc' : (isLoading ? '#b3e0ff' : '#ccffcc')}`;
+
+    // ローディング中はアイコンを追加
+    if (isLoading) {
+      const loadingText = document.createTextNode(' ');
+      const loadingSpinner = document.createElement('span');
+      loadingSpinner.textContent = '⟳';
+      loadingSpinner.style.display = 'inline-block';
+      loadingSpinner.style.animation = 'spin 2s linear infinite';
+      status.innerHTML = '';
+      status.appendChild(loadingSpinner);
+      status.appendChild(loadingText);
+      status.appendChild(document.createTextNode(message));
+    }
+
+    document.body.appendChild(status);
+
+    // エラーでなく、ローディング中でもない場合は、通知を指定時間後に消す
+    if (!isError && !isLoading) {
+      setTimeout(function () {
+        const notification = document.getElementById('status-notification');
+        if (notification && notification.parentNode) {
+          notification.parentNode.removeChild(notification);
+        }
+      }, duration);
+    }
+  }
+
 
   // 初期化
   console.log('ポップアップを初期化します');
