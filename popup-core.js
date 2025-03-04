@@ -279,7 +279,9 @@ document.addEventListener('DOMContentLoaded', function () {
   // カスタムイベントのエクスポート
   window.audioNormalizer = {
     getCurrentSettings: getCurrentSettings,
-    showNotification: showNotification
+    showNotification: showNotification,
+    // 設定リセット用に関数を追加
+    loadDefaultSettings: loadDefaultSettings
   };
 
 
