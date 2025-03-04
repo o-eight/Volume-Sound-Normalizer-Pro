@@ -202,6 +202,17 @@
       font-weight: bold;
       margin-bottom: 10px;
     }
+    
+    .beta-tag {
+      display: inline-block;
+      background-color: #ff9800;
+      color: white;
+      font-size: 10px;
+      padding: 2px 5px;
+      border-radius: 3px;
+      margin-left: 5px;
+      vertical-align: middle;
+    }
   </style>
 </head>
 
@@ -221,7 +232,7 @@
 
     <!-- ラウドネスノーマライズセクション -->
     <div class="feature-section">
-      <div class="section-title">自動音量調整</div>
+      <div class="section-title">自動音量調整 <span class="beta-tag">beta</span></div>
       <div class="toggle-container">
         <label class="switch">
           <input type="checkbox" id="loudness-norm-enabled">
@@ -257,7 +268,7 @@
   </div>
 
   <!-- ラウドネス設定 (折りたたみパネル) -->
-  <button class="collapsible" id="loudness-collapsible">ラウドネス詳細設定</button>
+  <button class="collapsible" id="loudness-collapsible">ラウドネス詳細設定 <span class="beta-tag">beta</span></button>
   <div class="loudness-settings">
     <div class="slider-container">
       <label for="target-loudness">目標レベル (LUFS):</label>
