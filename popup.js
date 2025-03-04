@@ -758,7 +758,7 @@ document.addEventListener('DOMContentLoaded', function () {
     advancedFeaturesToggle.classList.add('active');
     advancedFeaturesToggle.textContent = '上級者向け機能を隠す';
 
-        
+
     // ラウドネスメーターとスライダーの状態を更新
     updateLoudnessMeterTarget();
     updateLoudnessMeterRange();
@@ -778,15 +778,15 @@ document.addEventListener('DOMContentLoaded', function () {
     advancedFeaturesToggle.classList.remove('active');
     advancedFeaturesToggle.textContent = '上級者向け機能を表示';
 
-        // ラウドネスモニタリングを停止（非表示時は不要）
-        if (compressorSettings.loudnessNormEnabled) {
-          toggleLoudnessMonitoring(false);
-        }
+    // ラウドネスモニタリングを停止（非表示時は不要）
+    if (compressorSettings.loudnessNormEnabled) {
+      toggleLoudnessMonitoring(false);
+    }
   }
 
   // 上級者向け機能の状態に応じてラウドネスモニタリングの開始/停止を調整
   const originalToggleLoudnessMonitoring = toggleLoudnessMonitoring;
-  toggleLoudnessMonitoring = function(enabled) {
+  toggleLoudnessMonitoring = function (enabled) {
     // 上級者機能が表示されていない場合は監視を実行しない
     if (enabled && !advancedFeaturesContainer.classList.contains('visible')) {
       // 実際のメーター更新は行わないが、設定値は保持する
@@ -796,14 +796,135 @@ document.addEventListener('DOMContentLoaded', function () {
       }
       return;
     }
-    
+
     // 元の関数を呼び出す
     originalToggleLoudnessMonitoring(enabled);
   };
 
 
+  // URLリストを表示する関数
+  function displayExcludedUrls() {
+    const excludedUrlsList = document.getElementById('excluded-urls-list');
+    excludedUrlsList.innerHTML = '';
 
-  
+    chrome.storage.sync.get({ 'excludedUrls': [] }, function (items) {
+      const excludedUrls = items.excludedUrls || [];
+
+      if (excludedUrls.length === 0) {
+        excludedUrlsList.innerHTML = '<p style="color: #666; font-style: italic;">除外URLはありません</p>';
+        return;
+      }
+
+      excludedUrls.forEach((url, index) => {
+        const urlItem = document.createElement('div');
+        urlItem.style.display = 'flex';
+        urlItem.style.justifyContent = 'space-between';
+        urlItem.style.alignItems = 'center';
+        urlItem.style.padding = '3px 0';
+        urlItem.style.borderBottom = index < excludedUrls.length - 1 ? '1px solid #eee' : 'none';
+
+        const urlText = document.createElement('span');
+        urlText.textContent = url;
+        urlText.style.overflow = 'hidden';
+        urlText.style.textOverflow = 'ellipsis';
+        urlText.style.whiteSpace = 'nowrap';
+
+        const removeButton = document.createElement('button');
+        removeButton.textContent = '削除';
+        removeButton.style.backgroundColor = '#f44336';
+        removeButton.style.color = 'white';
+        removeButton.style.border = 'none';
+        removeButton.style.padding = '2px 5px';
+        removeButton.style.marginLeft = '5px';
+        removeButton.style.cursor = 'pointer';
+        removeButton.style.fontSize = '11px';
+
+        removeButton.addEventListener('click', function () {
+          removeExcludedUrl(url);
+        });
+
+        urlItem.appendChild(urlText);
+        urlItem.appendChild(removeButton);
+        excludedUrlsList.appendChild(urlItem);
+      });
+    });
+  }
+
+  // URLを追加する関数
+  function addExcludedUrl(url) {
+    if (!url) return;
+
+    // URLの形式をシンプルに修正（http://, https:// を削除）
+    let cleanUrl = url.trim();
+    cleanUrl = cleanUrl.replace(/^https?:\/\//, '');
+
+    chrome.storage.sync.get({ 'excludedUrls': [] }, function (items) {
+      let excludedUrls = items.excludedUrls || [];
+
+      // 既に存在する場合は追加しない
+      if (excludedUrls.includes(cleanUrl)) {
+        showNotification('このURLは既に除外リストに存在します', true, false, 2000);
+        return;
+      }
+
+      // URLを追加
+      excludedUrls.push(cleanUrl);
+
+      // ストレージに保存
+      chrome.storage.sync.set({ 'excludedUrls': excludedUrls }, function () {
+        displayExcludedUrls();
+        showNotification('URLを除外リストに追加しました', false, false, 2000);
+
+        // 入力フィールドをクリア
+        document.getElementById('excluded-url-input').value = '';
+      });
+    });
+  }
+
+  // URLを削除する関数
+  function removeExcludedUrl(url) {
+    chrome.storage.sync.get({ 'excludedUrls': [] }, function (items) {
+      let excludedUrls = items.excludedUrls || [];
+
+      // URLを削除
+      excludedUrls = excludedUrls.filter(item => item !== url);
+
+      // ストレージに保存
+      chrome.storage.sync.set({ 'excludedUrls': excludedUrls }, function () {
+        displayExcludedUrls();
+        showNotification('URLを除外リストから削除しました', false, false, 2000);
+      });
+    });
+  }
+
+  // イベントリスナー
+  document.getElementById('add-excluded-url').addEventListener('click', function () {
+    const url = document.getElementById('excluded-url-input').value;
+    addExcludedUrl(url);
+  });
+
+  document.getElementById('excluded-url-input').addEventListener('keypress', function (e) {
+    if (e.key === 'Enter') {
+      const url = document.getElementById('excluded-url-input').value;
+      addExcludedUrl(url);
+    }
+  });
+
+  // 折りたたみパネルのイベントリスナー
+  document.getElementById('excluded-urls-collapsible').addEventListener('click', function () {
+    this.classList.toggle('active');
+    const content = this.nextElementSibling;
+
+    if (content.style.maxHeight) {
+      content.style.maxHeight = null;
+    } else {
+      content.style.maxHeight = content.scrollHeight + 'px';
+    }
+  });
+
+  // 初期表示
+  displayExcludedUrls();
+
 
   // 通知を表示する汎用関数（既存の関数を拡張）
   function showNotification(message, isError = false, isLoading = false, duration = 2000) {

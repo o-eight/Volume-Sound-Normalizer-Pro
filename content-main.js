@@ -3,7 +3,7 @@
 
 (function () {
   // 初期化処理のメイン関数
-  function initializeExtension() {
+  async function initializeExtension() {
     // リアルタイム更新のスロットリング用
     let updateThrottleTimeout = null;
 
@@ -79,6 +79,41 @@
       return workletInitialized;
     }
 
+
+    async function checkIfUrlIsExcluded() {
+      const currentUrl = window.location.href;
+      const isExcluded = await isExcludedUrl(currentUrl);
+      
+      if (isExcluded) {
+        console.log('[Volume Normalizer] 現在のURLは除外リストに含まれています。機能を無効化します。');
+        // 既存のオーディオノードを切断
+        videoElements.forEach(video => {
+          if (connectedVideos.has(video)) {
+            try {
+              const nodes = connectedVideos.get(video);
+              if (nodes.source) nodes.source.disconnect();
+              if (nodes.compressor) nodes.compressor.disconnect();
+              if (nodes.gain) nodes.gain.disconnect();
+              if (nodes.analyser) nodes.analyser.disconnect();
+              if (nodes.loudnessWorklet) nodes.loudnessWorklet.disconnect();
+
+              // オリジナルのソースを直接出力先に接続
+              nodes.source.connect(audioContext.destination);
+            } catch (e) {
+              console.error('[Volume Normalizer] 切断エラー:', e);
+            }
+          }
+        });
+
+        // 新しい接続を防止するためのフラグ
+        compressorSettings.enabled = false;
+        compressorSettings.loudnessNormEnabled = false;
+        return true;
+      }
+
+      return false;
+    }
+
     // AudioContext再開のヘルパー関数
     async function resumeAudioContext() {
       if (audioContext && audioContext.state === 'suspended') {
@@ -130,10 +165,10 @@
     // 現在のチャンネルの設定を読み込む
     function loadChannelSettings() {
       // 既存のgetYouTubeChannelId関数を使用（content-early.jsで定義）
-      const channelInfo = window.getYouTubeChannelId ? 
-            window.getYouTubeChannelId() : 
-            { id: '', name: '', method: 'not_detected' };
-            
+      const channelInfo = window.getYouTubeChannelId ?
+        window.getYouTubeChannelId() :
+        { id: '', name: '', method: 'not_detected' };
+
       currentChannelId = channelInfo.id;
       const settingsKey = getChannelSettingsKey(currentChannelId);
 
@@ -180,7 +215,7 @@
           updateThrottleTimeout = setTimeout(() => {
             updateCompressorSettings();
             toggleCompressor(compressorSettings.enabled);
-            
+
             if ('loudnessNormEnabled' in compressorSettings) {
               toggleLoudnessNormalization(compressorSettings.loudnessNormEnabled);
             }
@@ -196,7 +231,7 @@
         }
         return true;
       }
-      
+
       else if (request.action === 'getLoudnessInfo') {
         try {
           sendResponse({
@@ -615,15 +650,15 @@
 
     // 初期設定の読み込み
     loadChannelSettings();
-    
+
     // 定期的なビデオ要素のチェック
     setInterval(findAndProcessVideos, 2000);
-    
+
     // ページ読み込み完了時に初期化
     window.addEventListener('load', () => {
       findAndProcessVideos();
     });
-    
+
     console.log('[Volume Normalizer] メイン機能が初期化されました');
   }
 
@@ -638,4 +673,3 @@
   }, 500);
 })();
 
-    

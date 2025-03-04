@@ -201,7 +201,7 @@
       font-weight: bold;
       margin-bottom: 10px;
     }
-    
+
     .beta-tag {
       display: inline-block;
       background-color: #ff9800;
@@ -212,7 +212,7 @@
       margin-left: 5px;
       vertical-align: middle;
     }
-    
+
     /* 上級者向け機能トグルボタン */
     .advanced-toggle-button {
       background-color: #f1f1f1;
@@ -226,17 +226,17 @@
       font-size: 13px;
       transition: background-color 0.2s;
     }
-    
+
     .advanced-toggle-button:hover {
       background-color: #e0e0e0;
     }
-    
+
     .advanced-toggle-button.active {
       background-color: #e7f3ff;
       border-color: #2196F3;
       color: #0d47a1;
     }
-    
+
     /* アニメーション効果 */
     #advanced-features-container {
       transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
@@ -244,7 +244,7 @@
       opacity: 0;
       overflow: hidden;
     }
-    
+
     #advanced-features-container.visible {
       max-height: 500px;
       opacity: 1;
@@ -319,7 +319,8 @@
   </div>
 
   <!-- 上級者向け機能コンテナ -->
-  <div id="advanced-features-container" style="display: none; margin-bottom: 15px; border: 1px solid #ddd; padding: 10px; border-radius: 4px; background-color: #f9f9f9;">
+  <div id="advanced-features-container"
+    style="display: none; margin-bottom: 15px; border: 1px solid #ddd; padding: 10px; border-radius: 4px; background-color: #f9f9f9;">
     <div class="feature-section">
       <div class="section-title">自動音量調整 <span class="beta-tag">beta</span></div>
       <div class="toggle-container">
@@ -340,11 +341,11 @@
         <span id="current-loudness-value">N/A</span>
         <span>0 LUFS</span>
       </div>
-      
+
       <!-- ラウドネス詳細設定を直接展開して表示（折りたたみなし） -->
       <div class="loudness-settings-direct" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee;">
         <div class="section-sub-title" style="font-size: 12px; margin-bottom: 8px; color: #555;">ラウドネス詳細設定</div>
-        
+
         <div class="slider-container">
           <label for="target-loudness">目標レベル (LUFS):</label>
           <input type="range" id="target-loudness" min="-50" max="-6" value="-24" step="0.5">
@@ -360,6 +361,25 @@
     </div>
   </div>
 
+
+  <!-- URL除外設定 -->
+  <button class="collapsible" id="excluded-urls-collapsible">URL除外設定</button>
+  <div class="advanced-settings">
+    <div style="margin-bottom: 10px;">
+      <p style="font-size: 12px; color: #666;">特定のURLではこの拡張機能の機能を無効にできます。ワイルドカード（*）を使用できます。</p>
+      <div id="excluded-urls-list"
+        style="margin-bottom: 10px; max-height: 100px; overflow-y: auto; border: 1px solid #ddd; padding: 5px;"></div>
+      <div style="display: flex;">
+        <input type="text" id="excluded-url-input" placeholder="例: example.com または *.example.com"
+          style="flex: 1; padding: 5px; margin-right: 5px;">
+        <button id="add-excluded-url"
+          style="background-color: #4CAF50; color: white; border: none; padding: 5px 10px; cursor: pointer;">追加</button>
+      </div>
+      <p style="font-size: 11px; color: #666; margin-top: 5px;">追加したURLでは、ページ更新後に拡張機能が無効化されます。</p>
+    </div>
+  </div>
+
+
   <div id="channel-info" style="margin-top: 15px; display: none;">
     <div class="channel-header">
       <strong>現在のチャンネル:</strong>
@@ -373,6 +393,10 @@
       <button id="save-settings" style="width: 48%;">デフォルトとして保存</button>
     </div>
   </div>
+
+
+
+
 
   <div id="non-youtube-info" style="margin-top: 15px;">
     <button id="save-settings-general" style="width: 100%;">設定を保存</button>

@@ -14,6 +14,24 @@
       return;
     }
   }
+  
+  function isExcludedUrl(url) {
+    return new Promise((resolve) => {
+      chrome.storage.sync.get({ 'excludedUrls': [] }, function(items) {
+        const excludedUrls = items.excludedUrls || [];
+        // 現在のURLがリストに含まれているかチェック
+        const isExcluded = excludedUrls.some(pattern => {
+          // 完全一致またはワイルドカードパターン（例：*.example.com）をサポート
+          if (pattern.includes('*')) {
+            const regexPattern = pattern.replace(/\*/g, '.*');
+            return new RegExp(regexPattern).test(url);
+          }
+          return url.includes(pattern);
+        });
+        resolve(isExcluded);
+      });
+    });
+  }
 
   // YouTubeのURLからチャンネルIDを取得する関数
   function getYouTubeChannelId() {
