@@ -7,8 +7,6 @@ let currentChannelInfo = {
 
 // pingメッセージに応答するリスナー
 chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
-  console.log('バックグラウンドがメッセージを受信:', request.action);
-
   if (request.action === 'ping') {
     sendResponse({ status: 'pong' });
   }
@@ -18,14 +16,11 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     currentChannelInfo.channelName = request.channelName;
     currentChannelInfo.detectionMethod = request.detectionMethod || 'unknown';
 
-    console.log('バックグラウンドがチャンネル情報を更新:', currentChannelInfo);
-
     // ポップアップが開いている場合は通知
     notifyPopupIfOpen();
   }
   else if (request.action === 'getStoredChannelInfo') {
     // ポップアップからのリクエストに保存されたチャンネル情報を返す
-    console.log('保存されたチャンネル情報を送信:', currentChannelInfo);
     sendResponse(currentChannelInfo);
   }
 
@@ -39,7 +34,6 @@ function notifyPopupIfOpen() {
     channelInfo: currentChannelInfo
   }).catch(error => {
     // ポップアップが開いていない場合はエラーになるが無視してよい
-    console.log('ポップアップへの通知をスキップ（おそらく閉じられています）');
   });
 }
 
