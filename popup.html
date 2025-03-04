@@ -156,40 +156,57 @@
       word-break: break-all;
     }
 
-    /* ラウドネスメーター用のスタイル */
-    .loudness-meter {
-      height: 16px;
-      width: 100%;
-      background: #e0e0e0;
-      border-radius: 8px;
-      overflow: hidden;
-      margin: 10px 0;
+
+    /* ツールチップスタイル */
+    .tooltip {
       position: relative;
+      display: inline-block;
     }
 
-    .loudness-bar {
-      height: 100%;
-      width: 0%;
-      background: linear-gradient(to right, #4CAF50, #FFEB3B, #F44336);
-      transition: width 0.3s ease;
+    .tooltip-text {
+      width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
-    .loudness-target {
-      position: absolute;
-      top: 0;
-      bottom: 0;
-      width: 2px;
-      background: #000;
-      z-index: 1;
+    /* ホバー時にカーソルをポインターに */
+    #excluded-urls-list span {
+      cursor: help;
     }
 
-    .loudness-range {
-      position: absolute;
-      top: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.1);
-      z-index: 0;
+    /* URL表示領域のスタイル改善 */
+    #excluded-urls-list {
+      margin-bottom: 10px;
+      max-height: 100px;
+      overflow-y: auto;
+      border: 1px solid #ddd;
+      padding: 5px;
+      font-size: 12px;
     }
+
+    #excluded-urls-list div {
+      padding: 5px 0;
+    }
+
+    /* 削除ボタンのスタイル */
+    .url-delete-btn {
+      background-color: #f44336;
+      color: white;
+      border: none;
+      padding: 2px 5px;
+      margin-left: 5px;
+      cursor: pointer;
+      font-size: 11px;
+      width: 50px;
+      border-radius: 3px;
+      text-align: center;
+    }
+
+    .url-delete-btn:hover {
+      background-color: #d32f2f;
+    }
+
 
     .feature-section {
       border-bottom: 1px solid #eee;

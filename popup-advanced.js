@@ -48,14 +48,21 @@ document.addEventListener('DOMContentLoaded', function () {
         urlItem.style.padding = '3px 0';
         urlItem.style.borderBottom = index < excludedUrls.length - 1 ? '1px solid #eee' : 'none';
 
+        // URL表示スペースを拡大
         const urlText = document.createElement('span');
         urlText.textContent = url;
+        urlText.title = url; // ツールチップの追加
         urlText.style.overflow = 'hidden';
         urlText.style.textOverflow = 'ellipsis';
         urlText.style.whiteSpace = 'nowrap';
+        urlText.style.flex = '1';  // フレックスで領域を最大化
+        urlText.style.maxWidth = 'calc(100% - 55px)';  // 削除ボタンのスペースを確保
+        urlText.style.cursor = 'default'; // ツールチップを表示するためのカーソル
 
+        // 削除ボタンのサイズを縮小
         const removeButton = document.createElement('button');
         removeButton.textContent = '削除';
+        removeButton.title = `${url} を除外リストから削除`; // ツールチップの追加
         removeButton.style.backgroundColor = '#f44336';
         removeButton.style.color = 'white';
         removeButton.style.border = 'none';
@@ -63,6 +70,9 @@ document.addEventListener('DOMContentLoaded', function () {
         removeButton.style.marginLeft = '5px';
         removeButton.style.cursor = 'pointer';
         removeButton.style.fontSize = '11px';
+        removeButton.style.width = '50px'; // 横幅を固定
+        removeButton.style.borderRadius = '3px'; // 角を丸く
+        removeButton.style.textAlign = 'center';
 
         removeButton.addEventListener('click', function () {
           removeExcludedUrl(url);
