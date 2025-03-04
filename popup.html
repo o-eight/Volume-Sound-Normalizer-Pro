@@ -313,6 +313,52 @@
     </div>
   </div>
 
+
+  <!-- URL除外設定 -->
+  <button class="collapsible" id="excluded-urls-collapsible">URL除外設定</button>
+  <div class="advanced-settings">
+    <div style="margin-bottom: 10px;">
+      <p style="font-size: 12px; color: #666;">特定のURLではこの拡張機能の機能を無効にできます。ワイルドカード（*）を使用できます。</p>
+      <div id="excluded-urls-list"
+        style="margin-bottom: 10px; max-height: 100px; overflow-y: auto; border: 1px solid #ddd; padding: 5px;"></div>
+      <div style="display: flex;">
+        <input type="text" id="excluded-url-input" placeholder="例: example.com または *.example.com"
+          style="flex: 1; padding: 5px; margin-right: 5px;">
+        <button id="add-excluded-url"
+          style="background-color: #4CAF50; color: white; border: none; padding: 5px 10px; cursor: pointer;">追加</button>
+      </div>
+      <button id="add-current-url"
+        style="margin-top: 5px; background-color: #2196F3; color: white; border: none; padding: 5px 10px; cursor: pointer; width: 100%;">
+        現在のURLを追加
+      </button>
+      <p style="font-size: 11px; color: #666; margin-top: 5px;">追加したURLでは、ページ更新後に拡張機能が無効化されます。</p>
+    </div>
+  </div>
+
+
+  <div id="channel-info" style="margin-top: 15px; display: none;">
+    <div class="channel-header">
+      <strong>現在のチャンネル:</strong>
+    </div>
+    <p><span id="channel-name">なし</span></p>
+    <div class="debug-info">
+      <span>取得方法: </span><span id="detection-method">不明</span>
+    </div>
+    <div style="display: flex; justify-content: space-between; margin-top: 10px;">
+      <button id="save-channel" style="width: 48%; background-color: #2196F3;">チャンネルに保存</button>
+      <button id="save-settings" style="width: 48%;">デフォルトとして保存</button>
+    </div>
+  </div>
+
+
+
+
+
+  <div id="non-youtube-info" style="margin-top: 15px;">
+    <button id="save-settings-general" style="width: 100%;">設定を保存</button>
+  </div>
+
+
   <!-- 上級者向け機能トグル -->
   <div style="margin-top: 15px; margin-bottom: 15px;">
     <button id="advanced-features-toggle" class="advanced-toggle-button">上級者向け機能を表示</button>
@@ -362,45 +408,6 @@
   </div>
 
 
-  <!-- URL除外設定 -->
-  <button class="collapsible" id="excluded-urls-collapsible">URL除外設定</button>
-  <div class="advanced-settings">
-    <div style="margin-bottom: 10px;">
-      <p style="font-size: 12px; color: #666;">特定のURLではこの拡張機能の機能を無効にできます。ワイルドカード（*）を使用できます。</p>
-      <div id="excluded-urls-list"
-        style="margin-bottom: 10px; max-height: 100px; overflow-y: auto; border: 1px solid #ddd; padding: 5px;"></div>
-      <div style="display: flex;">
-        <input type="text" id="excluded-url-input" placeholder="例: example.com または *.example.com"
-          style="flex: 1; padding: 5px; margin-right: 5px;">
-        <button id="add-excluded-url"
-          style="background-color: #4CAF50; color: white; border: none; padding: 5px 10px; cursor: pointer;">追加</button>
-      </div>
-      <p style="font-size: 11px; color: #666; margin-top: 5px;">追加したURLでは、ページ更新後に拡張機能が無効化されます。</p>
-    </div>
-  </div>
-
-
-  <div id="channel-info" style="margin-top: 15px; display: none;">
-    <div class="channel-header">
-      <strong>現在のチャンネル:</strong>
-    </div>
-    <p><span id="channel-name">なし</span></p>
-    <div class="debug-info">
-      <span>取得方法: </span><span id="detection-method">不明</span>
-    </div>
-    <div style="display: flex; justify-content: space-between; margin-top: 10px;">
-      <button id="save-channel" style="width: 48%; background-color: #2196F3;">チャンネルに保存</button>
-      <button id="save-settings" style="width: 48%;">デフォルトとして保存</button>
-    </div>
-  </div>
-
-
-
-
-
-  <div id="non-youtube-info" style="margin-top: 15px;">
-    <button id="save-settings-general" style="width: 100%;">設定を保存</button>
-  </div>
 
   <script src="popup.js"></script>
 </body>

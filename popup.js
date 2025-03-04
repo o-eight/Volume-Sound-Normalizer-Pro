@@ -850,6 +850,31 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
+  // 現在のURL取得関数を追加
+  function getCurrentTabUrl(callback) {
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+      if (tabs && tabs.length > 0) {
+        const url = tabs[0].url;
+        // URLからhttpやhttpsを除去して、シンプルな形式に変換
+        const cleanUrl = url.replace(/^https?:\/\//, '');
+        callback(cleanUrl);
+      } else {
+        callback('');
+      }
+    });
+  }
+
+  // 「現在のURLを追加」ボタンのイベントリスナー（popup.jsに追加）
+  document.getElementById('add-current-url').addEventListener('click', function () {
+    getCurrentTabUrl(function (currentUrl) {
+      if (currentUrl) {
+        document.getElementById('excluded-url-input').value = currentUrl;
+        addExcludedUrl(currentUrl);
+      } else {
+        showNotification('現在のURLを取得できませんでした', true, false, 2000);
+      }
+    });
+  });
   // URLを追加する関数
   function addExcludedUrl(url) {
     if (!url) return;
