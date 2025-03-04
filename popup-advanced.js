@@ -8,8 +8,6 @@ document.addEventListener('DOMContentLoaded', function () {
   // URL除外設定用要素
   const excludedUrlsCollapsible = document.getElementById('excluded-urls-collapsible');
   const excludedUrlsList = document.getElementById('excluded-urls-list');
-  const excludedUrlInput = document.getElementById('excluded-url-input');
-  const addExcludedUrlButton = document.getElementById('add-excluded-url');
   const addCurrentUrlButton = document.getElementById('add-current-url');
 
   // 折りたたみパネルのイベントリスナー（URL除外設定用）
@@ -26,11 +24,12 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
+
   // URLリストを表示する関数
   function displayExcludedUrls() {
     const excludedUrlsList = document.getElementById('excluded-urls-list');
     if (!excludedUrlsList) return;
-    
+
     excludedUrlsList.innerHTML = '';
 
     chrome.storage.sync.get({ 'excludedUrls': [] }, function (items) {
@@ -76,6 +75,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
+
   // 現在のURL取得関数
   function getCurrentTabUrl(callback) {
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
@@ -89,6 +89,7 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     });
   }
+
 
   // URLを追加する関数
   function addExcludedUrl(url) {
@@ -114,14 +115,10 @@ document.addEventListener('DOMContentLoaded', function () {
       chrome.storage.sync.set({ 'excludedUrls': excludedUrls }, function () {
         displayExcludedUrls();
         showNotification('URLを除外リストに追加しました', false, false, 2000);
-
-        // 入力フィールドをクリア
-        if (excludedUrlInput) {
-          excludedUrlInput.value = '';
-        }
       });
     });
   }
+
 
   // URLを削除する関数
   function removeExcludedUrl(url) {
@@ -139,6 +136,8 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
+
+
   // 通知関数
   function showNotification(message, isError = false, isLoading = false, duration = 2000) {
     // window.audioNormalizerが定義されていれば、そちらの関数を使用
@@ -146,7 +145,7 @@ document.addEventListener('DOMContentLoaded', function () {
       window.audioNormalizer.showNotification(message, isError, isLoading, duration);
       return;
     }
-    
+
     // 定義されていない場合は独自に実装
     const existingStatus = document.getElementById('status-notification');
     if (existingStatus) {
@@ -190,6 +189,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
+
+
   // 上級者向け機能を表示
   function showAdvancedFeatures() {
     advancedFeaturesContainer.style.display = 'block';
@@ -210,8 +211,10 @@ document.addEventListener('DOMContentLoaded', function () {
     advancedFeaturesToggle.textContent = '上級者向け機能を表示';
   }
 
+
+
   // イベントリスナーの設定
-  
+
   // ローカルストレージから上級者モードの状態を取得
   chrome.storage.local.get({
     'advanced_mode_enabled': false
@@ -242,32 +245,13 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // URL除外設定のイベントリスナー
-  if (addExcludedUrlButton) {
-    addExcludedUrlButton.addEventListener('click', function () {
-      if (excludedUrlInput) {
-        const url = excludedUrlInput.value;
-        addExcludedUrl(url);
-      }
-    });
-  }
 
-  if (excludedUrlInput) {
-    excludedUrlInput.addEventListener('keypress', function (e) {
-      if (e.key === 'Enter') {
-        const url = this.value;
-        addExcludedUrl(url);
-      }
-    });
-  }
 
+  // 現在のURLを追加するボタンのイベントリスナー
   if (addCurrentUrlButton) {
     addCurrentUrlButton.addEventListener('click', function () {
       getCurrentTabUrl(function (currentUrl) {
         if (currentUrl) {
-          if (excludedUrlInput) {
-            excludedUrlInput.value = currentUrl;
-          }
           addExcludedUrl(currentUrl);
         } else {
           showNotification('現在のURLを取得できませんでした', true, false, 2000);
@@ -276,10 +260,12 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
+
   // 初期表示
   if (excludedUrlsList) {
     displayExcludedUrls();
   }
+
 
   console.log('ポップアップ拡張機能を初期化しました');
 });
