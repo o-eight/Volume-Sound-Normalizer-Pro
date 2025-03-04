@@ -181,11 +181,7 @@ document.addEventListener('DOMContentLoaded', function () {
         attack: 50,
         release: 250,
         knee: 5,
-        makeupGain: 0,
-        // ラウドネスノーマライズのデフォルト設定を追加
-        loudnessNormEnabled: false,
-        targetLoudness: -24,
-        loudnessRange: 7
+        makeupGain: 0
       },
       [settingsKey]: null
     }, function (items) {
@@ -214,11 +210,7 @@ document.addEventListener('DOMContentLoaded', function () {
         attack: 50,
         release: 250,
         knee: 5,
-        makeupGain: 0,
-        // ラウドネスノーマライズのデフォルト設定を追加
-        loudnessNormEnabled: false,
-        targetLoudness: -24,
-        loudnessRange: 7
+        makeupGain: 0
       }
     }, function (items) {
       applySettingsToUI(items.default);
@@ -263,14 +255,7 @@ document.addEventListener('DOMContentLoaded', function () {
       attack: parseInt(attackSlider.value, 10),
       release: parseInt(releaseSlider.value, 10),
       knee: parseInt(kneeSlider.value, 10),
-      makeupGain: parseFloat(makeupGainSlider.value),
-      // ラウドネスノーマライザー設定を追加
-      loudnessNormEnabled: document.getElementById('loudness-norm-enabled') ? 
-        document.getElementById('loudness-norm-enabled').checked : false,
-      targetLoudness: document.getElementById('target-loudness') ? 
-        parseFloat(document.getElementById('target-loudness').value) : -24,
-      loudnessRange: document.getElementById('loudness-range-slider') ? 
-        parseFloat(document.getElementById('loudness-range-slider').value) : 7
+      makeupGain: parseFloat(makeupGainSlider.value)
     };
   }
   

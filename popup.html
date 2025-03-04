@@ -354,55 +354,6 @@
     <button id="save-settings-general" style="width: 100%;">設定を保存</button>
   </div>
 
-
-  <!-- 上級者向け機能トグル -->
-  <div style="margin-top: 15px; margin-bottom: 15px;">
-    <button id="advanced-features-toggle" class="advanced-toggle-button">上級者向け機能を表示</button>
-  </div>
-
-  <!-- 上級者向け機能コンテナ -->
-  <div id="advanced-features-container"
-    style="display: none; margin-bottom: 15px; border: 1px solid #ddd; padding: 10px; border-radius: 4px; background-color: #f9f9f9;">
-    <div class="feature-section">
-      <div class="section-title">自動音量調整 <span class="beta-tag">beta</span></div>
-      <div class="toggle-container">
-        <label class="switch">
-          <input type="checkbox" id="loudness-norm-enabled">
-          <span class="slider"></span>
-        </label>
-        <span>ラウドネスノーマライズを有効化</span>
-      </div>
-
-      <div class="loudness-meter">
-        <div class="loudness-range" id="loudness-range"></div>
-        <div class="loudness-target" id="loudness-target"></div>
-        <div class="loudness-bar" id="loudness-bar"></div>
-      </div>
-      <div style="display: flex; justify-content: space-between; font-size: 11px;">
-        <span>-60 LUFS</span>
-        <span id="current-loudness-value">N/A</span>
-        <span>0 LUFS</span>
-      </div>
-
-      <!-- ラウドネス詳細設定を直接展開して表示（折りたたみなし） -->
-      <div class="loudness-settings-direct" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee;">
-        <div class="section-sub-title" style="font-size: 12px; margin-bottom: 8px; color: #555;">ラウドネス詳細設定</div>
-
-        <div class="slider-container">
-          <label for="target-loudness">目標レベル (LUFS):</label>
-          <input type="range" id="target-loudness" min="-50" max="-6" value="-24" step="0.5">
-          <span class="value-display" id="target-loudness-value">-24</span>
-        </div>
-
-        <div class="slider-container">
-          <label for="loudness-range">許容範囲 (dB):</label>
-          <input type="range" id="loudness-range-slider" min="1" max="10" value="7" step="0.5">
-          <span class="value-display" id="loudness-range-value">7</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <script src="popup-core.js"></script>
   <script src="popup-advanced.js"></script>
 </body>
