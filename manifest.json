@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Volume & Sound Normalizer Pro",
-  "version": "1.1",
+  "version": "1.2",
   "description": "YouTubeなどのHTML5ビデオの音量調整、ラウドネスノーマライズ、およびダイナミクス処理が可能な拡張機能",
   "permissions": ["activeTab", "storage", "tabs"],
   "background": {
@@ -38,7 +38,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["popup.html", "popup.js", "loudness-processor.js"],
+      "resources": ["popup.html", "popup-core.js", "popup-advanced.js", "loudness-processor.js"],
       "matches": ["*://*.youtube.com/*", "<all_urls>"]
     }
   ]

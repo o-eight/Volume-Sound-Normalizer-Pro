@@ -79,11 +79,30 @@
       return workletInitialized;
     }
 
+    // URLが除外リストに含まれているかチェックする関数（既存関数を活用）
+    async function isExcludedUrl(url) {
+      return new Promise((resolve) => {
+        chrome.storage.sync.get({ 'excludedUrls': [] }, function (items) {
+          const excludedUrls = items.excludedUrls || [];
+          // 現在のURLがリストに含まれているかチェック
+          const isExcluded = excludedUrls.some(pattern => {
+            // 完全一致またはワイルドカードパターン（例：*.example.com）をサポート
+            if (pattern.includes('*')) {
+              const regexPattern = pattern.replace(/\*/g, '.*');
+              return new RegExp(regexPattern).test(url);
+            }
+            return url.includes(pattern);
+          });
+          resolve(isExcluded);
+        });
+      });
+    }
+
 
     async function checkIfUrlIsExcluded() {
       const currentUrl = window.location.href;
       const isExcluded = await isExcludedUrl(currentUrl);
-      
+
       if (isExcluded) {
         console.log('[Volume Normalizer] 現在のURLは除外リストに含まれています。機能を無効化します。');
         // 既存のオーディオノードを切断
@@ -202,6 +221,14 @@
       if (request.action === 'ping') {
         sendResponse({ status: 'pong' });
         return true;
+      }
+
+      if (request.action === 'isUrlExcluded') {
+        const currentUrl = window.location.href;
+        isExcludedUrl(currentUrl.replace(/^https?:\/\//, '')).then(excluded => {
+          sendResponse({ excluded: excluded });
+        });
+        return true; // 非同期レスポンスのために必要
       }
 
       if (request.action === 'updateCompressorSettings') {
