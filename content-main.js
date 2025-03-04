@@ -19,6 +19,7 @@
     let videoElements = [];
     let connectedVideos = new WeakMap();
     let currentChannelId = '';
+    let currentPlatform = ''; // 'youtube' または 'twitch'
     let defaultSettings = {
       enabled: true,
       threshold: -24,
@@ -125,20 +126,37 @@
         element.offsetHeight > 0;
     }
 
-    // チャンネル固有の設定キーを作成
-    function getChannelSettingsKey(channelId) {
-      return channelId ? `channel_${channelId}` : 'default';
+    // チャンネル固有の設定キーを作成する関数を修正
+    function getChannelSettingsKey(channelId, platform) {
+      return channelId ? `channel_${platform}_${channelId}` : 'default';
     }
 
-    // 現在のチャンネルの設定を読み込む
+
+    // 現在のチャンネルの設定を読み込む関数を修正
     function loadChannelSettings() {
-      // 既存のgetYouTubeChannelId関数を使用（content-early.jsで定義）
-      const channelInfo = window.getYouTubeChannelId ?
-        window.getYouTubeChannelId() :
-        { id: '', name: '', method: 'not_detected' };
+      const url = window.location.href;
+      let channelInfo;
+
+      if (url.includes('youtube.com')) {
+        // YouTubeチャンネル情報を取得
+        channelInfo = window.getYouTubeChannelId ?
+          window.getYouTubeChannelId() :
+          { id: '', name: '', method: 'not_detected' };
+        currentPlatform = 'youtube';
+      } else if (url.includes('twitch.tv')) {
+        // Twitchチャンネル情報を取得
+        channelInfo = window.getTwitchChannelId ?
+          window.getTwitchChannelId() :
+          { id: '', name: '', method: 'not_detected' };
+        currentPlatform = 'twitch';
+      } else {
+        // その他のサイト
+        channelInfo = { id: '', name: '', method: 'unsupported_site' };
+        currentPlatform = '';
+      }
 
       currentChannelId = channelInfo.id;
-      const settingsKey = getChannelSettingsKey(currentChannelId);
+      const settingsKey = getChannelSettingsKey(currentChannelId, currentPlatform);
 
       chrome.storage.sync.get({
         'default': defaultSettings,
@@ -160,7 +178,8 @@
           action: 'currentChannelUpdate',
           channelId: channelInfo.id,
           channelName: channelInfo.name || '',
-          detectionMethod: channelInfo.method
+          detectionMethod: channelInfo.method,
+          platform: currentPlatform
         });
       });
     }
@@ -203,9 +222,35 @@
       return true;
     });
 
-    // ページ内の動画要素を探してコンプレッサーを適用
+
+    // ページ内の動画要素を探す関数の強化
     function findAndProcessVideos() {
       const videos = document.querySelectorAll('video');
+
+      // Twitchの場合、特定のクラスや要素を持つ動画に対象を絞る
+      if (window.location.href.includes('twitch.tv')) {
+        // Twitchでは特定のプレーヤーが使われることが多い
+        const twitchPlayers = document.querySelectorAll('.video-player__container video, .player-video video');
+        if (twitchPlayers.length > 0) {
+          twitchPlayers.forEach(video => {
+            if (!connectedVideos.has(video)) {
+              videoElements.push(video);
+              video.addEventListener('play', function () {
+                if (!connectedVideos.has(video)) {
+                  applyCompressorToVideo(video);
+                }
+              });
+
+              if (!video.paused) {
+                applyCompressorToVideo(video);
+              }
+            }
+          });
+          return;
+        }
+      }
+
+      // 通常の動画検出（すべてのサイト向け）
       videos.forEach(video => {
         if (!connectedVideos.has(video)) {
           videoElements.push(video);
@@ -221,7 +266,7 @@
         }
       });
     }
-
+    
     // 動画にコンプレッサーを適用する関数
     async function applyCompressorToVideo(videoElement) {
       try {

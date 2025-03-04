@@ -14,10 +14,11 @@
       return;
     }
   }
-  
+
+  // 1. isExcludedUrl 関数の修正（Twitch.tv も含めるように）
   function isExcludedUrl(url) {
     return new Promise((resolve) => {
-      chrome.storage.sync.get({ 'excludedUrls': [] }, function(items) {
+      chrome.storage.sync.get({ 'excludedUrls': [] }, function (items) {
         const excludedUrls = items.excludedUrls || [];
         // 現在のURLがリストに含まれているかチェック
         const isExcluded = excludedUrls.some(pattern => {
@@ -32,6 +33,153 @@
       });
     });
   }
+
+
+  // content-early.js に追加する Twitch チャンネル検出機能
+
+  // Twitch チャンネル情報を取得する関数
+  function getTwitchChannelId() {
+    const url = window.location.href;
+    if (!url.includes('twitch.tv')) {
+      return { id: '', name: '', method: 'not_twitch' };
+    }
+
+    let channelId = '';
+    let channelName = '';
+    let detectionMethod = '';
+
+    try {
+      // チャンネルページ（通常のストリーマーページ）の場合
+      // 例: https://www.twitch.tv/shroud
+      const matches = url.match(/twitch\.tv\/([^\/\?]+)/);
+      if (matches && matches[1] && !['directory', 'videos', 'clips', 'settings', 'subscriptions', 'inventory'].includes(matches[1])) {
+        channelId = matches[1].toLowerCase();
+        detectionMethod = 'channel_url';
+
+        // チャンネル名をページタイトルから取得
+        const titleElem = document.querySelector('title');
+        if (titleElem) {
+          const titleText = titleElem.textContent;
+          // タイトル例: "Shroud - Twitch" または "Shroud streaming VALORANT - Twitch"
+          const channelNameMatch = titleText.match(/^([^-]+)/);
+          if (channelNameMatch) {
+            channelName = channelNameMatch[1].trim();
+          } else {
+            channelName = channelId;
+          }
+        } else {
+          channelName = channelId;
+        }
+
+        // もしくはプロフィール名から取得を試みる
+        if (!channelName || channelName === channelId) {
+          const profileNameElem = document.querySelector('h1[data-a-target="channel-header-info-name"]');
+          if (profileNameElem) {
+            channelName = profileNameElem.textContent.trim();
+          }
+        }
+
+        return { id: channelId, name: channelName, method: detectionMethod };
+      }
+
+      // VOD（ビデオオンデマンド）ページの場合
+      // 例: https://www.twitch.tv/videos/1234567890
+      if (url.includes('/videos/')) {
+        const videoOwnerElem = document.querySelector('a[data-a-target="video-info-username"]');
+        if (videoOwnerElem) {
+          const href = videoOwnerElem.getAttribute('href');
+          if (href) {
+            const ownerMatches = href.match(/\/([^\/\?]+)$/);
+            if (ownerMatches && ownerMatches[1]) {
+              channelId = ownerMatches[1].toLowerCase();
+              channelName = videoOwnerElem.textContent.trim();
+              detectionMethod = 'video_owner';
+              return { id: channelId, name: channelName, method: detectionMethod };
+            }
+          }
+        }
+
+        // 別の方法で試行：メタデータから取得
+        const metaChannelElem = document.querySelector('meta[property="og:channel"]');
+        if (metaChannelElem) {
+          channelId = metaChannelElem.content.toLowerCase();
+          const metaChannelNameElem = document.querySelector('meta[property="og:channel:display_name"]');
+          if (metaChannelNameElem) {
+            channelName = metaChannelNameElem.content;
+          } else {
+            channelName = channelId;
+          }
+          detectionMethod = 'meta_data';
+          return { id: channelId, name: channelName, method: detectionMethod };
+        }
+      }
+
+      // クリップページの場合
+      // 例: https://www.twitch.tv/shroud/clip/FunnyClipName
+      if (url.includes('/clip/')) {
+        // クリップ作成者の情報を取得
+        const clipperElem = document.querySelector('a[data-a-target="clips-card-broadcaster-name"]');
+        if (clipperElem) {
+          const href = clipperElem.getAttribute('href');
+          if (href) {
+            const clipperMatches = href.match(/\/([^\/\?]+)$/);
+            if (clipperMatches && clipperMatches[1]) {
+              channelId = clipperMatches[1].toLowerCase();
+              channelName = clipperElem.textContent.trim();
+              detectionMethod = 'clip_creator';
+              return { id: channelId, name: channelName, method: detectionMethod };
+            }
+          }
+        }
+
+        // クリップURLから直接取得
+        const clipUrlMatches = url.match(/twitch\.tv\/([^\/\?]+)\/clip\//);
+        if (clipUrlMatches && clipUrlMatches[1]) {
+          channelId = clipUrlMatches[1].toLowerCase();
+          detectionMethod = 'clip_url';
+
+          // 名前をタイトルから取得
+          const titleElem = document.querySelector('title');
+          if (titleElem) {
+            const titleMatch = titleElem.textContent.match(/^([^-]+)/);
+            if (titleMatch) {
+              channelName = titleMatch[1].trim();
+            } else {
+              channelName = channelId;
+            }
+          } else {
+            channelName = channelId;
+          }
+
+          return { id: channelId, name: channelName, method: detectionMethod };
+        }
+      }
+    } catch (error) {
+      detectionMethod = 'error';
+    }
+
+    return { id: channelId || 'unknown', name: channelName || channelId || 'unknown', method: detectionMethod || 'unknown' };
+  }
+
+  // 既存の getYouTubeChannelId 関数を拡張して、Twitch も処理できるように統合関数を作成
+  function getChannelInfo() {
+    const url = window.location.href;
+
+    // YouTube URL の場合
+    if (url.includes('youtube.com')) {
+      return window.getYouTubeChannelId();
+    }
+
+    // Twitch URL の場合
+    if (url.includes('twitch.tv')) {
+      return getTwitchChannelId();
+    }
+
+    // その他のサイトの場合
+    return { id: '', name: '', method: 'unsupported_site' };
+  }
+
+
 
   // YouTubeのURLからチャンネルIDを取得する関数
   function getYouTubeChannelId() {
@@ -101,7 +249,7 @@
           if (channelElement && channelElement.href) {
             detectionMethod = selectorInfo.method;
             const channelUrl = channelElement.href;
-            
+
             // チャンネルIDを取得
             const urlMatches = channelUrl.match(/\/channel\/([^\/\?]+)/);
             if (urlMatches && urlMatches[1]) {
@@ -193,7 +341,8 @@
     return '';
   }
 
-  // メッセージハンドラーを登録（基本的なコミュニケーション用）
+
+  // 2. メッセージハンドラーを更新
   chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     // Pingに応答
     if (request.action === 'ping') {
@@ -203,19 +352,33 @@
 
     // チャンネル情報のリクエストに応答
     if (request.action === 'getChannelInfo') {
-      const channelInfo = getYouTubeChannelId();
+      const url = window.location.href;
+      let channelInfo;
+
+      if (url.includes('youtube.com')) {
+        channelInfo = getYouTubeChannelId();
+      } else if (url.includes('twitch.tv')) {
+        channelInfo = getTwitchChannelId();
+      } else {
+        channelInfo = { id: '', name: '', method: 'unsupported_site' };
+      }
+
       sendResponse(channelInfo);
       return true;
     }
-    
+
     return true;
   });
+
+
 
   // チャンネル情報を定期的に更新
   let lastUrl = window.location.href;
   let lastChannelId = '';
   let navigationChangeTimeout = null;
 
+
+  // 3. チャンネル情報を定期的に更新する部分を修正
   function checkForNavigationChanges() {
     const currentUrl = window.location.href;
 
@@ -227,7 +390,16 @@
       }
 
       navigationChangeTimeout = setTimeout(() => {
-        const channelInfo = getYouTubeChannelId();
+        let channelInfo;
+
+        if (currentUrl.includes('youtube.com')) {
+          channelInfo = getYouTubeChannelId();
+        } else if (currentUrl.includes('twitch.tv')) {
+          channelInfo = getTwitchChannelId();
+        } else {
+          channelInfo = { id: '', name: '', method: 'unsupported_site' };
+        }
+
         const newChannelId = channelInfo.id;
         const channelName = channelInfo.name || getChannelName();
 
@@ -238,12 +410,15 @@
             action: 'channelChanged',
             channelId: newChannelId,
             channelName: channelName,
-            detectionMethod: channelInfo.method
+            detectionMethod: channelInfo.method,
+            platform: currentUrl.includes('youtube.com') ? 'youtube' :
+              (currentUrl.includes('twitch.tv') ? 'twitch' : 'unknown')
           });
         }
       }, 1000);
     }
   }
+
 
   // URLの変更を監視
   setInterval(checkForNavigationChanges, 1000);
@@ -255,16 +430,31 @@
 
   // 初期化
   checkExtensionContext();
-  const initialChannelInfo = getYouTubeChannelId();
-  
+  let initialChannelInfo;
+
+  const currentUrl = window.location.href;
+  if (currentUrl.includes('youtube.com')) {
+    initialChannelInfo = getYouTubeChannelId();
+  } else if (currentUrl.includes('twitch.tv')) {
+    initialChannelInfo = getTwitchChannelId();
+  } else {
+    initialChannelInfo = { id: '', name: '', method: 'unsupported_site' };
+  }
+
+
   // バックグラウンドスクリプトにチャンネル情報を通知
   chrome.runtime.sendMessage({
     action: 'currentChannelUpdate',
     channelId: initialChannelInfo.id,
     channelName: initialChannelInfo.name || getChannelName(),
-    detectionMethod: initialChannelInfo.method
+    detectionMethod: initialChannelInfo.method,
+    platform: currentUrl.includes('youtube.com') ? 'youtube' :
+      (currentUrl.includes('twitch.tv') ? 'twitch' : 'unknown')
   });
 
   // グローバルスコープにチャンネル情報取得関数を露出
   window.getYouTubeChannelId = getYouTubeChannelId;
+  // グローバルスコープに関数を露出
+  window.getTwitchChannelId = getTwitchChannelId;
+  window.getChannelInfo = getChannelInfo;
 })();

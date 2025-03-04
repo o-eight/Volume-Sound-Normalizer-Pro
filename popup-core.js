@@ -31,7 +31,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // グローバル変数
   let currentChannelId = '';
-  let isYouTube = false;
+  let currentPlatform = ''; // 'youtube' または 'twitch'
+  let isVideoSite = false;
   let updateTimeout = null;
   let compressorSettings = {};
 
@@ -85,7 +86,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // アクティブなタブからチャンネル情報を取得
+  // 2. アクティブなタブからチャンネル情報を取得する関数を修正
   function getChannelInfoFromTab() {
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
       // 現在のタブがあるか確認
@@ -99,15 +100,30 @@ document.addEventListener('DOMContentLoaded', function () {
       const currentTab = tabs[0];
       console.log('現在のタブ:', currentTab.url);
 
-      // YouTubeのページかどうかを確認
-      isYouTube = currentTab.url && currentTab.url.includes('youtube.com');
+      // YouTubeまたはTwitchのページかどうかを確認
+      isVideoSite = currentTab.url && (currentTab.url.includes('youtube.com') || currentTab.url.includes('twitch.tv'));
 
-      if (isYouTube) {
-        console.log('YouTubeページを検出しました');
+      // プラットフォームを特定
+      if (currentTab.url && currentTab.url.includes('youtube.com')) {
+        currentPlatform = 'youtube';
+      } else if (currentTab.url && currentTab.url.includes('twitch.tv')) {
+        currentPlatform = 'twitch';
+      } else {
+        currentPlatform = '';
+      }
+
+      if (isVideoSite) {
+        console.log('動画サイトページを検出しました:', currentPlatform);
         channelInfoDiv.style.display = 'block';
         nonYoutubeInfoDiv.style.display = 'none';
 
-        // YouTubeの場合はチャンネル情報を取得
+        // チャンネルの表示名を更新
+        const platformNameSpan = document.getElementById('platform-name');
+        if (platformNameSpan) {
+          platformNameSpan.textContent = currentPlatform === 'youtube' ? 'YouTube' : 'Twitch';
+        }
+
+        // チャンネル情報を取得
         try {
           chrome.tabs.sendMessage(currentTab.id, {
             action: 'getChannelInfo'
@@ -122,7 +138,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             if (response && response.channelId) {
-              updateChannelUI(response.channelId, response.channelName, response.detectionMethod);
+              updateChannelUI(response.channelId, response.channelName, response.method);
             } else {
               // チャンネル情報がない場合
               console.log('チャンネル情報が利用できません');
@@ -138,8 +154,8 @@ document.addEventListener('DOMContentLoaded', function () {
           loadDefaultSettings();
         }
       } else {
-        // YouTube以外のページ
-        console.log('YouTube以外のページを検出');
+        // YouTube/Twitch以外のページ
+        console.log('動画サイト以外のページを検出');
         channelInfoDiv.style.display = 'none';
         nonYoutubeInfoDiv.style.display = 'block';
         loadDefaultSettings();
@@ -168,9 +184,11 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  // チャンネル固有の設定を読み込む
+
+  // 3. チャンネル固有の設定を読み込む関数を修正
   function loadChannelSettings(channelId) {
-    const settingsKey = channelId ? `channel_${channelId}` : 'default';
+    // プラットフォーム情報も含めてキーを生成
+    const settingsKey = channelId ? `channel_${currentPlatform}_${channelId}` : 'default';
     console.log('設定読み込み:', settingsKey);
 
     chrome.storage.sync.get({
@@ -189,16 +207,15 @@ document.addEventListener('DOMContentLoaded', function () {
       const settings = items[settingsKey] || items.default;
       console.log('読み込んだ設定:', settings);
       applySettingsToUI(settings);
-      
+
       // 他のモジュールで使用できるように設定を保存
       compressorSettings = settings;
-      
+
       // カスタムイベントを発行して設定が読み込まれたことを通知
       const event = new CustomEvent('settingsLoaded', { detail: settings });
       document.dispatchEvent(event);
     });
   }
-
   // デフォルト設定を読み込む
   function loadDefaultSettings() {
     console.log('デフォルト設定を読み込みます');
@@ -214,10 +231,10 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     }, function (items) {
       applySettingsToUI(items.default);
-      
+
       // 他のモジュールで使用できるように設定を保存
       compressorSettings = items.default;
-      
+
       // カスタムイベントを発行して設定が読み込まれたことを通知
       const event = new CustomEvent('settingsLoaded', { detail: items.default });
       document.dispatchEvent(event);
@@ -258,14 +275,15 @@ document.addEventListener('DOMContentLoaded', function () {
       makeupGain: parseFloat(makeupGainSlider.value)
     };
   }
-  
+
   // カスタムイベントのエクスポート
   window.audioNormalizer = {
     getCurrentSettings: getCurrentSettings,
     showNotification: showNotification
   };
 
-  // 設定保存の処理
+
+  // 4. 設定保存の処理を修正
   function saveSettings(saveForChannel, saveAsDefault) {
     const settings = getCurrentSettings();
 
@@ -274,7 +292,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // 現在の設定を保存
     if (saveForChannel && currentChannelId) {
-      const channelSettingsKey = `channel_${currentChannelId}`;
+      // プラットフォーム情報も含めたキーを生成
+      const channelSettingsKey = `channel_${currentPlatform}_${currentChannelId}`;
 
       // まず設定をストレージに直接保存
       chrome.storage.sync.set({

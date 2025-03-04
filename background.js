@@ -1,8 +1,9 @@
-// 現在のチャンネル情報を保持するグローバル変数
+// 現在のチャンネル情報を保持するグローバル変数を更新
 let currentChannelInfo = {
   channelId: '',
   channelName: '',
-  detectionMethod: ''
+  detectionMethod: '',
+  platform: ''  // 'youtube' または 'twitch'
 };
 
 // pingメッセージに応答するリスナー
@@ -15,6 +16,7 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     currentChannelInfo.channelId = request.channelId;
     currentChannelInfo.channelName = request.channelName;
     currentChannelInfo.detectionMethod = request.detectionMethod || 'unknown';
+    currentChannelInfo.platform = request.platform || 'unknown'; // プラットフォーム情報を追加
 
     // ポップアップが開いている場合は通知
     notifyPopupIfOpen();
@@ -37,11 +39,11 @@ function notifyPopupIfOpen() {
   });
 }
 
-// インストール時やアップデート時にYouTubeのタブをリロード
+// インストール時やアップデート時にYouTubeとTwitchのタブをリロード
 chrome.runtime.onInstalled.addListener(function () {
   chrome.tabs.query({}, function (tabs) {
     for (let i = 0; i < tabs.length; i++) {
-      if (tabs[i].url && tabs[i].url.includes('youtube.com')) {
+      if (tabs[i].url && (tabs[i].url.includes('youtube.com') || tabs[i].url.includes('twitch.tv'))) {
         chrome.tabs.reload(tabs[i].id);
       }
     }
