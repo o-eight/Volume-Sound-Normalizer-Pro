@@ -121,4 +121,5 @@ MIT License - 詳細はLICENSEファイルを参照してください。
 
 Pixiv Fanbox経由で作者の活動の支援が可能になっています。
 仕組み上、毎月更新になっていますが1ヶ月入って抜ける形でも助かります。
+
 https://o-eight.fanbox.cc
