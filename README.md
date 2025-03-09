@@ -120,7 +120,8 @@ MIT License - 詳細はLICENSEファイルを参照してください。
 
 ## 支援について
 
-Pixiv Fanbox経由で作者の活動の支援が可能になっています。
-仕組み上、毎月更新になっていますが1ヶ月入って抜ける形でも助かります。
+Buy Me a Coffeeもしくは、Pixiv Fanbox経由で作者の活動の支援が可能になっています。
+
+<script type="text/javascript" src="https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js" data-name="bmc-button" data-slug="oeight" data-color="#FFDD00" data-emoji="☕"  data-font="Cookie" data-text="Buy me a coffee" data-outline-color="#000000" data-font-color="#000000" data-coffee-color="#ffffff" ></script>
 
 https://o-eight.fanbox.cc
