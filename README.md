@@ -120,7 +120,7 @@ MIT License - 詳細はLICENSEファイルを参照してください。
 
 ## 支援について
 
-Buy Me a Coffeeもしくは、Pixiv Fanbox経由で作者の活動の支援が可能になっています。
+Buy Me a Coffee、もしくは、Pixiv Fanboxを使用して作者の活動の支援することができます。
 
 <a href="https://www.buymeacoffee.com/oeight" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
 
